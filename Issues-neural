@@ -1,0 +1,132 @@
+Issues Identified:
+Low Accuracy:
+
+Both training and validation accuracy are low, indicating the model struggles to learn meaningful patterns.
+Class Imbalance:
+
+Despite using class weights, the model performs poorly on the minority class ("Rise (1)").
+Overfitting or Underfitting:
+
+Validation accuracy and loss do not improve significantly, suggesting the model may be underfitting due to insufficient complexity or overfitting due to noise in the data.
+Daily Gains Prediction:
+
+The model's ability to predict daily gains ("Rise (1)") is weak, as indicated by the low precision (0.30) and recall (0.60) for this class.
+Recommendations for Improvement:
+1. Data Preprocessing:
+Augment Data: Generate synthetic samples for the minority class ("Rise (1)") using techniques like SMOTE or data augmentation.
+Feature Engineering: Add more relevant features that capture market trends, such as moving averages, volatility, or sentiment analysis.
+2. Model Architecture:
+Increase Complexity: Add more LSTM layers or units to capture temporal dependencies better.
+Regularization: Use techniques like L2 regularization or dropout to prevent overfitting.
+Bidirectional LSTM: Use bidirectional LSTMs to capture patterns in both forward and backward directions.
+3. Hyperparameter Tuning:
+Experiment with different learning rates, batch sizes, and optimizers (e.g., AdamW).
+Use a grid search or Bayesian optimization to find the best hyperparameters.
+4. Class Imbalance:
+Use oversampling, undersampling, or synthetic data generation to balance the dataset.
+Experiment with different class weights to improve recall for the minority class.
+5. Evaluation Metrics:
+Use metrics like AUC-ROC or precision-recall curves to evaluate the model's performance on imbalanced data.
+6. Early Stopping:
+Use early stopping with a smaller patience value to prevent overfitting.
+7. Alternative Models:
+Experiment with other architectures like GRUs, Transformers, or hybrid models combining CNNs and LSTMs.
+Next Steps:
+Implement data augmentation or resampling techniques to address class imbalance.
+Modify the model architecture to include bidirectional LSTMs and additional regularization.
+Perform hyperparameter tuning to optimize learning rate, batch size, and architecture.
+Re-train the model and evaluate its performance using AUC-ROC and precision-recall curves.
+Let me know if you'd like help implementing any of these changes!
+
+GPT-4o • 1x
+
+
+
+
+preciso treinar todos estes assets: 
+# config.py
+
+# Configurações gerais
+WINDOW_SIZE = 30
+NUM_FEATURES_PER_ASSET = 20 # Número de features calculadas para CADA ativo
+L2_REG = 0.0001
+PPO_LEARNING_RATE = 0.0005
+RISK_FREE_RATE_ANNUAL = 0.2
+REWARD_WINDOW = 252
+REWARD_CALC_WINDOW = 60
+
+# Configurações para o agente de dados financeiros
+# Dicionário de símbolos de ativos por tipo de mercado
+# Adicione mais ativos conforme necessário
+ASSET_CONFIGS = {
+    "STOCKS": {
+        "AAPL": {"interval": "60min"}, # Apple (NASDAQ)
+        "MSFT": {"interval": "60min"}, # Microsoft (NASDAQ)
+        "GOOGL": {"interval": "60min"}, # Alphabet (NASDAQ)
+        "AMZN": {"interval": "60min"}, # Amazon (NASDAQ)
+        "NVDA": {"interval": "60min"}, # Nvidia (NASDAQ)
+        "TSLA": {"interval": "60min"}, # Tesla (NASDAQ)
+        "BRK.B": {"interval": "60min"}, # Berkshire Hathaway (NYSE, mas geralmente coberta)
+        "JPM": {"interval": "60min"}, # JP Morgan Chase (NYSE)
+        "V": {"interval": "60min"}, # Visa (NYSE)
+        "XOM": {"interval": "60min"}, # ExxonMobil (NYSE)
+        "PETR4.SA": {"interval": "60min"}, # Petrobras (B3)
+        "VALE3.SA": {"interval": "60min"}, # Vale (B3)
+        "ITUB4.SA": {"interval": "60min"}, # Itaú Unibanco (B3)
+        "BBDC4.SA": {"interval": "60min"}, # Bradesco (B3)
+        "B3SA3.SA": {"interval": "60min"}, # B3 S.A. (B3)
+        "7203.T": {"interval": "60min"}, # Toyota Motor Corp (TSE - Japão)
+        "9984.T": {"interval": "60min"}, # SoftBank Group Corp (TSE - Japão)
+        "000001.SZ": {"interval": "60min"}, # Ping An Bank Co Ltd (SZSE - China)
+        "600519.SS": {"interval": "60min"}, # Kweichow Moutai Co Ltd (SSE - China)
+        "RELIANCE.NS": {"interval": "60min"}, # Reliance Industries (NSE - Índia)
+        "TCS.NS": {"interval": "60min"}, # Tata Consultancy Services (NSE - Índia)
+    },
+    "FOREX": {
+        "EURUSD": {"interval": "60min"}, # Euro/Dólar
+        "GBPUSD": {"interval": "60min"}, # Libra/Dólar
+        "USDJPY": {"interval": "60min"}, # Dólar/Iene Japonês
+        "AUDUSD": {"interval": "60min"}, # Dólar Australiano/Dólar Americano
+    },
+    "CRYPTO": {
+        "BTC/USD": {"interval": "60min"}, # Bitcoin/Dólar
+        "ETH/USD": {"interval": "60min"}, # Ethereum/Dólar
+        "XRP/USD": {"interval": "60min"}, # Ripple/Dólar
+        "LTC/USD": {"interval": "60min"}, # Litecoin/Dólar
+    }
+}
+
+# Lista plana de todos os símbolos de ativos para o ambiente RL
+ALL_ASSET_SYMBOLS = []
+for asset_type in ASSET_CONFIGS:
+    for asset_key in ASSET_CONFIGS[asset_type]:
+        ALL_ASSET_SYMBOLS.append(asset_key)
+
+NUM_ASSETS = len(ALL_ASSET_SYMBOLS)
+
+# Configurações para DeepPortfolioAgentNetwork
+ASSET_CNN_FILTERS1 = 32
+ASSET_CNN_FILTERS2 = 64
+ASSET_LSTM_UNITS1 = 64
+ASSET_LSTM_UNITS2 = 32
+ASSET_DROPOUT = 0.2
+MHA_NUM_HEADS = 4
+MHA_KEY_DIM_DIVISOR = 2
+FINAL_DENSE_UNITS1 = 128
+FINAL_DENSE_UNITS2 = ASSET_LSTM_UNITS2
+FINAL_DROPOUT = 0.3
+USE_SENTIMENT_ANALYSIS = True
+
+# Chave da API Finnhub
+FINNHUB_API_KEY = "d3ledrhr01qq28en5ebgd3ledrhr01qq28en5ec0"
+
+# Chave da API Twelve Data
+TWELVE_DATA_API_KEY = "8798569186934c3089c169619aea9975"
+
+# Chave da API Alpha Vantage
+ALPHA_VANTAGE_API_KEY = "OPXK6MV8QIN4J2JJ"
+
+# Configurações de Cache
+CACHE_DIR = "./data_cache"
+CACHE_EXPIRATION_HOURS = 24 # Dados em cache expiram após 24 horas
+
