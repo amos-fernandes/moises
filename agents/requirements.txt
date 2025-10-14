@@ -1,0 +1,21 @@
+pandas
+numpy
+scikit-learn
+tensorflow
+streamlit
+matplotlib
+fastapi
+uvicorn
+httpx
+pydantic
+python-dotenv
+loguru
+# agno @ git+https://github.com/agno-agi/agno.git  Obs importante
+jinja2
+yfinance
+PyJWT
+transformers
+gymnasium
+tf-keras
+ccxt
+pandas_ta
