@@ -1,0 +1,38 @@
+[
+    {
+      "nome": "Coletor de Dados",
+      "status": "Ativo",
+      "ultima_acao": "Captura de dados da B3 às 13:00",
+      "proxima_execucao": "2025-05-09 14:00",
+      "resultado": "+2.8%"
+    },
+    {
+      "nome": "Analisador de Sentimentos",
+      "status": "Ativo",
+      "ultima_acao": "Análise do Twitter sobre VALE3",
+      "proxima_execucao": "2025-05-09 14:15",
+      "resultado": "+1.4%"
+    },
+    {
+      "nome": "Executor de Investimentos",
+      "status": "Ativo",
+      "ultima_acao": "Compra de PETR4 via Algotrader",
+      "proxima_execucao": "2025-05-09 14:30",
+      "resultado": "+3.1%"
+    },
+    {
+      "nome": "Ajuste de Portfólio",
+      "status": "Em espera",
+      "ultima_acao": "Rebalanceamento de ativos",
+      "proxima_execucao": "2025-05-09 15:00",
+      "resultado": "+0.9%"
+    },
+    {
+      "nome": "Gerenciador de Risco",
+      "status": "Ativo",
+      "ultima_acao": "Redução de exposição em ativos voláteis",
+      "proxima_execucao": "2025-05-09 14:45",
+      "resultado": "+1.7%"
+    }
+  ]
+  

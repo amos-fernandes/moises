@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Dashboard de Crédito — ATCoin Token</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Dashboard de Crédito</h1>
+        
+        <div class="workflow-section">
+            <h2>Workflow dos Agentes e Rede Neural</h2>
+            <div class="mermaid">
+graph TD
+    A[Agente de Coleta de Dados] --> B(Rede Neural);
+    B --> C[Agente de Análise de Risco];
+    C --> D[Agente de Decisão de Crédito];
+    D --> E[Resultado da Análise];
+            </div>
+        </div>
+
+        <div class="transactions-section">
+            <h2>Transações de Investimento</h2>
+            <!-- Conteúdo das transações aqui -->
+        </div>
+
+        <div class="chatbot-section">
+            <h2>Assistente de Crédito (Chatbot RAG)</h2>
+            <!-- Conteúdo do chatbot aqui -->
+        </div>
+    </div>
+    <script>
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</body>
+</html>

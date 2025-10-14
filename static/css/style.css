@@ -1,0 +1,80 @@
+/* rnn/static/css/style.css */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #0f1620;
+  color: #e0e0e0;
+  line-height: 1.6;
+}
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+.logo { width: 80px; border-radius: 50%; }
+h1 { color: #00ff88; margin: 10px 0; }
+h2 { color: #00ccff; border-bottom: 2px solid #00ccff; padding-bottom: 5px; margin: 20px 0; }
+
+.status-grid, .nft-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+}
+.status-card {
+  background: #1a2430;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #00ccff;
+}
+.metrics, .trades, .nft-gallery {
+  background: #1a2430;
+  padding: 20px;
+  border-radius: 10px;
+  margin: 20px 0;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+th, td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #333;
+}
+th {
+  background: #001f33;
+  color: #00ccff;
+}
+tr:hover { background: #002a4d; }
+
+.nft-item {
+  background: #001f33;
+  padding: 15px;
+  border-radius: 8px;
+  text-align: center;
+  border: 1px solid #00ccff;
+}
+.nft-item img {
+  width: 100%;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+.nft-item a {
+  color: #00ccff;
+  text-decoration: none;
+}
+
+footer {
+  text-align: center;
+  margin-top: 40px;
+  color: #888;
+  font-size: 0.9em;
+}

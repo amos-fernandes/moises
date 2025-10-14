@@ -1,0 +1,73 @@
+<!-- rnn/templates/dashboard.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ATCoin Neural Dashboard</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+ <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <script src="https://unpkg.com/web3@4.0.0-rc.2/dist/web3.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <img src="/static/assets/logo.png" alt="ATCoin Logo" class="logo"/>
+      <h1>ATCoin Neural Dashboard</h1>
+      <p>Monitoramento em tempo real do agente de IA</p>
+    </header>
+
+    <section class="status-panel">
+      <h2>>Status do Sistema</h2>
+      <div class="status-grid">
+        <div class="status-card"><strong>Conexão com Binance</strong>: <span id="binance-status">✅ Conectado</span></div>
+        <div class="status-card"><strong>Modelo RNN</strong>: <span id="rnn-status">✅ Ativo</span></div>
+        <div class="status-card"><strong>MongoDB</strong>: <span id="db-status">✅ Online</span></div>
+        <div class="status-card"><strong>Web3 (Polygon)</strong>: <span id="web3-status">⏳ Carregando...</span></div>
+      </div>
+    </section>
+
+    <section class="metrics">
+      <h2>Desempenho do Portfólio</h2>
+      <div id="monte-carlo-plot"></div>
+    </section>
+
+    <section class="trades">
+      <h2>Últimas Operações</h2>
+      <table id="trades-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Cliente</th>
+            <th>Ativo</th>
+            <th>Valor Inicial</th>
+            <th>Valor Final</th>
+            <th>Lucro/Prejuízo</th>
+            <th>Status</th>
+            <th>NFT</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Preenchido via JS -->
+        </tbody>
+      </table>
+    </section>
+
+    <section class="nft-gallery">
+      <h2>Seus NFTs de Operações</h2>
+      <div id="nft-container" class="nft-grid">
+        <!-- Carregado dinamicamente -->
+        <p>Conecte sua carteira para ver seus NFTs.</p>
+      </div>
+    </section>
+
+    <footer>
+      <p>© 2025 ATCoin Neural Agents | Sistema de Trading Algorítmico com IA</p>
+    </footer>
+  </div>
+
+  <script src="/static/js/main.js"></script>
+</body>
+</html>

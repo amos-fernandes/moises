@@ -1,0 +1,132 @@
+{
+  "timestamp": "2025-08-08T08:17:48.353165",
+  "checks": [
+    {
+      "name": "Sistema",
+      "status": "info",
+      "details": "Plataforma: linux",
+      "timestamp": "2025-08-08T08:17:48.354087"
+    },
+    {
+      "name": "Arquivo: app.py",
+      "status": "success",
+      "details": "Encontrado",
+      "timestamp": "2025-08-08T08:17:48.354482"
+    },
+    {
+      "name": "Arquivo: requirements.txt",
+      "status": "success",
+      "details": "Encontrado",
+      "timestamp": "2025-08-08T08:17:48.354641"
+    },
+    {
+      "name": "Arquivo: Procfile",
+      "status": "success",
+      "details": "Encontrado",
+      "timestamp": "2025-08-08T08:17:48.354789"
+    },
+    {
+      "name": "Arquivo: templates/dashboard.html",
+      "status": "success",
+      "details": "Encontrado",
+      "timestamp": "2025-08-08T08:17:48.354937"
+    },
+    {
+      "name": "Arquivo: static/css/style.css",
+      "status": "success",
+      "details": "Encontrado",
+      "timestamp": "2025-08-08T08:17:48.355093"
+    },
+    {
+      "name": "Arquivo: src/model/model.h5",
+      "status": "success",
+      "details": "Encontrado",
+      "timestamp": "2025-08-08T08:17:48.355232"
+    },
+    {
+      "name": "Arquivo: src/model/vec_normalize_stats.pkl",
+      "status": "success",
+      "details": "Encontrado",
+      "timestamp": "2025-08-08T08:17:48.355394"
+    },
+    {
+      "name": "Arquivo: src/model/other_indicators_scaler.joblib",
+      "status": "success",
+      "details": "Encontrado",
+      "timestamp": "2025-08-08T08:17:48.355531"
+    },
+    {
+      "name": "Arquivo: src/model/price_volume_atr_norm_scaler_sup.joblib",
+      "status": "success",
+      "details": "Encontrado",
+      "timestamp": "2025-08-08T08:17:48.355675"
+    },
+    {
+      "name": "Arquivo: src/model/price_volume_atr_norm_scaler.joblib",
+      "status": "success",
+      "details": "Encontrado",
+      "timestamp": "2025-08-08T08:17:48.355818"
+    },
+    {
+      "name": "Arquivo: src/model/rnn_predictor.py",
+      "status": "success",
+      "details": "Encontrado",
+      "timestamp": "2025-08-08T08:17:48.355954"
+    },
+    {
+      "name": "ENV: AIBANK_API_KEY",
+      "status": "warning",
+      "details": "Não configurada (pode causar falha)",
+      "timestamp": "2025-08-08T08:17:48.356037"
+    },
+    {
+      "name": "ENV: CCXT_API_KEY",
+      "status": "info",
+      "details": "Opcional para simulação",
+      "timestamp": "2025-08-08T08:17:48.356111"
+    },
+    {
+      "name": "ENV: CCXT_API_SECRET",
+      "status": "info",
+      "details": "Opcional para simulação",
+      "timestamp": "2025-08-08T08:17:48.356179"
+    },
+    {
+      "name": "ENV: CALLBACK_SHARED_SECRET",
+      "status": "warning",
+      "details": "Não configurada (pode causar falha)",
+      "timestamp": "2025-08-08T08:17:48.356246"
+    },
+    {
+      "name": "ENV: AIBANK_CALLBACK_URL",
+      "status": "warning",
+      "details": "Não configurada (pode causar falha)",
+      "timestamp": "2025-08-08T08:17:48.356330"
+    },
+    {
+      "name": "Dependências Python",
+      "status": "success",
+      "details": "Todas instaladas",
+      "timestamp": "2025-08-08T08:17:51.396214"
+    },
+    {
+      "name": "API: /health",
+      "status": "success",
+      "details": "Retorno 200. Modelo NÃO carregado",
+      "timestamp": "2025-08-08T08:17:51.567339"
+    },
+    {
+      "name": "API: /api/invest",
+      "status": "success",
+      "details": "Requisição aceita. ID: d509f606-32e5-4728-a9c2-3f1a15cb9e25",
+      "timestamp": "2025-08-08T08:17:51.678030"
+    },
+    {
+      "name": "HF Space Status",
+      "status": "error",
+      "details": "API do HF retornou 405",
+      "timestamp": "2025-08-08T08:17:51.851480"
+    }
+  ],
+  "overall_status": "critical"
+}

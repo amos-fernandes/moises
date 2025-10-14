@@ -1,0 +1,28 @@
+scikit-learn
+tensorflow
+streamlit
+matplotlib
+fastapi
+uvicorn
+httpx
+pydantic
+python-dotenv
+loguru
+# agno @ git+https://github.com/agno-agi/agno.git
+jinja2
+yfinance
+PyJWT
+transformers
+gymnasium
+tf-keras
+ccxt
+
+
+# Versões compatíveis com pandas_ta e squeeze_pro
+
+ccxt
+pandas-ta
+
+numpy==1.26.4
+pandas==2.1.4
+aiohttp
