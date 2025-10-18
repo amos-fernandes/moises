@@ -1,0 +1,14 @@
+.nina
+nina-debug.log
+nina
+venv
+.venv
+# Model artifacts and scaler files
+app/model/
+src/model/
+*.joblib
+*.pt
+*.pth
+*.onnx
+dist/
+__pycache__/

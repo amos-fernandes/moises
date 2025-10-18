@@ -1,0 +1,21 @@
+# Optional dependencies used by data handlers and sentiment/market providers
+# Install only if you need external data providers or TA features
+pandas_ta
+alpha_vantage
+twelvedata
+yfinance
+ccxt
+huggingface_hub
+transformers
+# Optional data & TA providers
+pandas_ta
+pandas_ta_classic
+alpha_vantage
+twelvedata
+yfinance
+ccxt
+
+# Optional ML extras
+transformers
+onnxruntime
+hf_xet

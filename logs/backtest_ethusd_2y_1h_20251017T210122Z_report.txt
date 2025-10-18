@@ -1,0 +1,8 @@
+Backtest report for ETH-USD period=2y interval=1h
+Start capital: 100000.0
+End capital: 14083.59
+Total return: -0.8592
+Annualized return (approx): -0.6243
+Max drawdown (abs): 95330.73
+Annualized vol (approx): 0.3590
+Trades count: 1352

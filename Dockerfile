@@ -20,4 +20,4 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Expõe porta padrão Gradio ou Uvicorn
 EXPOSE 7860
 # Comando de inicialização
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "7860"]

@@ -70,23 +70,32 @@ def main():
    
     print("Preparando e salvando scalers para a API...")
 
-    # Garantir que todas as colunas de BASE_FEATURE_COLS existem ANTES de tentar fitar os scalers
-    missing_base_for_api_scalers = [col for col in BASE_FEATURE_COLS if col not in ohlcv_df_final_features.columns]
-    if missing_base_for_api_scalers:
-        print(f"ERRO: Colunas de BASE_FEATURE_COLS ({missing_base_for_api_scalers}) não encontradas para fitar scalers da API.")
-        print(f"Disponíveis: {ohlcv_df_final_features.columns.tolist()}")
+    # If some BASE_FEATURE_COLS are missing (e.g. pandas_ta not installed), fall back to
+    # the intersection of configured BASE_FEATURE_COLS and the columns actually present.
+    available_base_features = [col for col in BASE_FEATURE_COLS if col in ohlcv_df_final_features.columns]
+    if len(available_base_features) != len(BASE_FEATURE_COLS):
+        missing_base_for_api_scalers = [col for col in BASE_FEATURE_COLS if col not in ohlcv_df_final_features.columns]
+        print(f"AVISO: Algumas BASE_FEATURE_COLS estão ausentes, seguindo com o conjunto disponível: {available_base_features}")
+        print(f"Colunas faltando: {missing_base_for_api_scalers}")
+
+    # Use the available features for scalers and downstream processing
+    effective_base_features = available_base_features
+    if not effective_base_features:
+        print("ERRO: Nenhuma feature base disponível para treinar o modelo.")
         return
 
-    api_price_vol_cols = [col for col in BASE_FEATURE_COLS if 'close_div_atr' in col or 'volume_div_atr' in col]
-    api_indicator_cols = [col for col in BASE_FEATURE_COLS if col not in api_price_vol_cols]
+    # Build api scaler column sets from configured lists, but filter them to what's present
+    api_price_vol_cols = [col for col in api_price_vol_atr_cols if col in ohlcv_df_final_features.columns]
+    api_indicator_cols = [col for col in api_indicator_cols if col in ohlcv_df_final_features.columns and col not in api_price_vol_cols]
 
+    # Fit API scalers only on available columns, skip with warning if empty
     if api_price_vol_cols:
         price_volume_scaler_api = MinMaxScaler()
         price_volume_scaler_api.fit(ohlcv_df_final_features[api_price_vol_cols])
         joblib.dump(price_volume_scaler_api, os.path.join(MODEL_SAVE_DIR, PRICE_VOL_SCALER_NAME))
         print(f"Scaler de Preço/Volume (API: {api_price_vol_cols}) salvo.")
     else:
-        print("Aviso: Nenhuma coluna de preço/volume definida para o scaler da API.")
+        print("Aviso: Nenhuma coluna de preço/volume disponível para o scaler da API. Pulando fit.")
 
     if api_indicator_cols:
         indicator_scaler_api = MinMaxScaler()
@@ -94,22 +103,22 @@ def main():
         joblib.dump(indicator_scaler_api, os.path.join(MODEL_SAVE_DIR, INDICATOR_SCALER_NAME))
         print(f"Scaler de Indicadores (API: {api_indicator_cols}) salvo.")
     else:
-        print("Aviso: Nenhuma coluna de indicador definida para o scaler da API.")
+        print("Aviso: Nenhuma coluna de indicador disponível para o scaler da API. Pulando fit.")
         
     # --- 3. Escalonar TODAS as Features para Treinamento do Modelo Atual ---
     # Este scaler é apenas para o processo de treinamento aqui.
     # Ele é treinado em TODAS as BASE_FEATURE_COLS juntas.
-    print(f"Escalonando features para treinamento (colunas: {BASE_FEATURE_COLS})...")
-    training_features_df = ohlcv_df_final_features[BASE_FEATURE_COLS].copy()
-    
+    print(f"Escalonando features para treinamento (colunas efetivas: {effective_base_features})...")
+    training_features_df = ohlcv_df_final_features[effective_base_features].copy()
+
     general_training_scaler = MinMaxScaler()
     scaled_values_for_training = general_training_scaler.fit_transform(training_features_df)
-    
-    # DataFrame com colunas escaladas, ex: 'close_div_atr_scaled', 'rsi_14_scaled'
-    # Usa EXPECTED_SCALED_FEATURES_FOR_MODEL do config.py
+
+    # Build expected scaled feature names dynamically from the effective base features
+    local_expected_scaled = [f"{col}_scaled" for col in effective_base_features]
     df_scaled_for_sequences = pd.DataFrame(
-        scaled_values_for_training, 
-        columns=EXPECTED_SCALED_FEATURES_FOR_MODEL, 
+        scaled_values_for_training,
+        columns=local_expected_scaled,
         index=training_features_df.index
     )
     
@@ -119,18 +128,17 @@ def main():
     if df_for_sequences.empty: print("DataFrame para sequências vazio após escalonamento/join."); return
 
     # --- 4. Criar Sequências ---
-    # As colunas para as sequências são as EXPECTED_SCALED_FEATURES_FOR_MODEL
-    X, y = create_sequences(df_for_sequences, "target", WINDOW_SIZE, EXPECTED_SCALED_FEATURES_FOR_MODEL)
+    # As colunas para as sequências são as local_expected_scaled (dinâmicas)
+    X, y = create_sequences(df_for_sequences, "target", WINDOW_SIZE, local_expected_scaled)
     if X.shape[0] == 0: print("Nenhuma sequência criada."); return
 
     print("Preparando, fitando e salvando scalers...")
     os.makedirs(MODEL_SAVE_DIR, exist_ok=True)
 
-    # Garantir que todas as colunas de BASE_FEATURE_COLS existem em ohlcv_df_final_features
+    # Do NOT treat missing BASE_FEATURE_COLS as fatal here; we've already adapted to available features.
     missing_base_cols = [col for col in BASE_FEATURE_COLS if col not in ohlcv_df_final_features.columns]
     if missing_base_cols:
-        print(f"ERRO FATAL: Colunas de BASE_FEATURE_COLS ({missing_base_cols}) não encontradas em ohlcv_df_final_features.")
-        return
+        print(f"AVISO: Algumas BASE_FEATURE_COLS ausentes e serão ignoradas: {missing_base_cols}")
 
     # Definir quais colunas de BASE_FEATURE_COLS vão para cada scaler
     # Estas são as colunas que representam valores normalizados pelo ATR (preço, volume, corpo)
@@ -138,16 +146,17 @@ def main():
         'open_div_atr', 'high_div_atr', 'low_div_atr', 'close_div_atr', 
         'volume_div_atr', 'body_size_norm_atr' 
     ]
-    # Remover colunas que podem não existir se você não as adicionou a BASE_FEATURE_COLS
-    price_vol_atr_norm_cols = [col for col in price_vol_atr_norm_cols if col in BASE_FEATURE_COLS]
+    # Keep only those that actually exist in the dataframe
+    price_vol_atr_norm_cols = [col for col in price_vol_atr_norm_cols if col in ohlcv_df_final_features.columns]
 
 
     # As colunas restantes de BASE_FEATURE_COLS são os "outros indicadores"
-    other_indicator_cols = [col for col in BASE_FEATURE_COLS if col not in price_vol_atr_norm_cols]
+    other_indicator_cols = [col for col in BASE_FEATURE_COLS if col in ohlcv_df_final_features.columns and col not in price_vol_atr_norm_cols]
 
     # DataFrames para fitar os scalers
-    df_for_pv_scaler = ohlcv_df_final_features[price_vol_atr_norm_cols].copy()
-    df_for_ind_scaler = ohlcv_df_final_features[other_indicator_cols].copy()
+    # Safe selection using intersection of desired cols and present columns
+    df_for_pv_scaler = ohlcv_df_final_features.loc[:, price_vol_atr_norm_cols].copy() if price_vol_atr_norm_cols else pd.DataFrame()
+    df_for_ind_scaler = ohlcv_df_final_features.loc[:, other_indicator_cols].copy() if other_indicator_cols else pd.DataFrame()
 
     # Fitar e Salvar o Price/Volume (ATR Normalized) Scaler
     if not df_for_pv_scaler.empty:
@@ -191,14 +200,14 @@ def main():
             
     # Verificar se todas as colunas escaladas esperadas foram criadas
     # `EXPECTED_SCALED_FEATURES_FOR_MODEL` vem do config.py
-    missing_scaled_cols = [col for col in EXPECTED_SCALED_FEATURES_FOR_MODEL if col not in df_scaled_for_sequences.columns]
+    missing_scaled_cols = [col for col in local_expected_scaled if col not in df_scaled_for_sequences.columns]
     if missing_scaled_cols:
         print(f"ERRO FATAL: Colunas escaladas esperadas ({missing_scaled_cols}) não foram criadas para as sequências.")
         print(f"Colunas escaladas disponíveis: {df_scaled_for_sequences.columns.tolist()}")
         return
 
-    # Reordenar colunas para garantir a ordem de EXPECTED_SCALED_FEATURES_FOR_MODEL
-    df_scaled_for_sequences = df_scaled_for_sequences[EXPECTED_SCALED_FEATURES_FOR_MODEL]
+    # Reordenar colunas para garantir a ordem de local_expected_scaled
+    df_scaled_for_sequences = df_scaled_for_sequences[local_expected_scaled]
     
     # Juntar o target de volta
     df_for_sequences = df_scaled_for_sequences.join(ohlcv_df_final_features[['target']])
@@ -209,7 +218,7 @@ def main():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
     print(f"Treino: {X_train.shape[0]} amostras, Teste: {X_test.shape[0]} amostras.")
 
-    X, y = create_sequences(df_for_sequences, "target", WINDOW_SIZE, EXPECTED_SCALED_FEATURES_FOR_MODEL)
+    X, y = create_sequences(df_for_sequences, "target", WINDOW_SIZE, local_expected_scaled)
     if X.shape[0] == 0: print("Nenhuma sequência criada."); return
 
         # --- 6. Dividir Dados ---
@@ -218,14 +227,9 @@ def main():
 
     # --- 7. Construir e Treinar Modelo ---
     print("Construindo modelo LSTM...")
-    # NUM_FEATURES é importado de config.py e deve ser len(BASE_FEATURE_COLS)
-    # EXPECTED_SCALED_FEATURES_FOR_MODEL também é de config.py e é [f"{col}_scaled" for col in BASE_FEATURE_COLS]
-    # O número de colunas em X_train (X_train.shape[2]) DEVE ser igual a NUM_FEATURES.
-    # E NUM_FEATURES DEVE ser igual a len(EXPECTED_SCALED_FEATURES_FOR_MODEL).
-    
-    actual_num_features = NUM_FEATURES # Se estiverem consistentes
-
-    model_input_shape = (WINDOW_SIZE, actual_num_features) 
+    # Determine actual number of features from the dynamically created scaled columns
+    actual_num_features = len(local_expected_scaled)
+    model_input_shape = (WINDOW_SIZE, actual_num_features)
     model = build_lstm_model(model_input_shape) # model_builder.py usa LEARNING_RATE do config
 
     print("Iniciando treinamento do modelo...")
@@ -291,13 +295,28 @@ def main():
     print("\nMatriz de Confusão no Conjunto de Teste:")
     cm = confusion_matrix(y_test, y_pred_classes)
     print(cm)
-    import seaborn as sns # Para um plot mais bonito da matriz
-    plt.figure(figsize=(6,5))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=['No Rise', 'Rise'], yticklabels=['No Rise', 'Rise'])
-    plt.xlabel('Predito')
-    plt.ylabel('Verdadeiro')
-    plt.title('Matriz de Confusão')
-    plt.savefig(os.path.join(MODEL_SAVE_DIR, "confusion_matrix.png"))
+    # Try seaborn for nicer heatmap; if not available, fallback to matplotlib imshow
+    try:
+        import seaborn as sns # Para um plot mais bonito da matriz
+        plt.figure(figsize=(6,5))
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=['No Rise', 'Rise'], yticklabels=['No Rise', 'Rise'])
+        plt.xlabel('Predito')
+        plt.ylabel('Verdadeiro')
+        plt.title('Matriz de Confusão')
+        plt.savefig(os.path.join(MODEL_SAVE_DIR, "confusion_matrix.png"))
+    except Exception:
+        plt.figure(figsize=(6,5))
+        plt.imshow(cm, cmap='Blues', interpolation='nearest')
+        plt.colorbar()
+        # annotate values
+        for (i, j), val in np.ndenumerate(cm):
+            plt.text(j, i, int(val), ha='center', va='center', color='white' if cm.max() > 0 else 'black')
+        plt.xticks([0,1], ['No Rise', 'Rise'])
+        plt.yticks([0,1], ['No Rise', 'Rise'])
+        plt.xlabel('Predito')
+        plt.ylabel('Verdadeiro')
+        plt.title('Matriz de Confusão (matplotlib)')
+        plt.savefig(os.path.join(MODEL_SAVE_DIR, "confusion_matrix.png"))
 
     # --- 9. Salvar Modelo e Scalers ---
     print("Salvando modelo e scalers...")

@@ -1,0 +1,27 @@
+version: '3.8'
+services:
+  api:
+    build: .
+    image: moises_api:latest
+    container_name: moises_api
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+version: '3.8'
+services:
+  atcoin-api:
+    build: .
+    image: moises/atcoin-api:latest
+    container_name: atcoin_api
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./logs:/app/logs
+      - ./src:/app/src
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped

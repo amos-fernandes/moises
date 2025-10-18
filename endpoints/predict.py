@@ -5,7 +5,7 @@ from pydantic import BaseModel
 import jwt
 import numpy as np
 import tensorflow as tf
-from rnn.models.deep_portfolio import DeepPortfolioAI
+from models.deep_portfolio import DeepPortfolioAI
 
 
 router = APIRouter()

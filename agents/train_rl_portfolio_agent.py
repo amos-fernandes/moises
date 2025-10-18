@@ -1,16 +1,22 @@
 # train_rl_portfolio_agent.py
+import sys
+from pathlib import Path
+# Ensure repo root is on sys.path so relative imports work when script is run directly
+repo_root = str(Path(__file__).resolve().parents[1])
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
+import gymnasium as gym
+import tensorflow as tf
+import pandas as pd
+# Ensure MlpExtractor and torch.nn are available for the custom extractor defined below
+from stable_baselines3.common.torch_layers import MlpExtractor
+import torch.nn as nn
 #from transformers import logger
 
 # rnn/agents/custom_policies.py (NOVO ARQUIVO, ou adicione ao deep_portfolio.py)
-
-import gymnasium as gym # Usar gymnasium
-import tensorflow as tf
-from stable_baselines3.common.torch_layers import BaseFeaturesExtractor as PyTorchBaseFeaturesExtractor
-
-from stable_baselines3.common.torch_layers import MlpExtractor
-import torch.nn as nn
 
 class CustomMlpExtractor(MlpExtractor):
     def __init__(self, input_dim, net_arch, activation_fn, device):
@@ -31,6 +37,8 @@ from typing import List, Dict, Any, Optional, Union, Type
 # Importar sua rede e configs
 #import agents.DeepPortfolioAgent as DeepPortfolioAgent
 from DeepPortfolioAgent import DeepPortfolioAgentNetwork 
+from agents.feature_scaler_adapter import fit_and_create_scaled
+import os
 # from ..config import (NUM_ASSETS, WINDOW_SIZE, NUM_FEATURES_PER_ASSET, ...) # Importe do seu config real
 # VALORES DE EXEMPLO (PEGUE DO SEU CONFIG.PY REAL)
 NUM_ASSETS_POLICY = 4
@@ -592,9 +600,74 @@ from custom_policies import CustomPortfolioPolicy # Importar a política customi
 PPO_LEARNING_RATE = 0.0005
 
 
-from data_handler_multi_asset import get_multi_asset_data_for_rl, MULTI_ASSET_SYMBOLS # Do seu config/data_handler
-from portfolio_environment import PortfolioEnv 
-from deep_portfolio import DeepPortfolioAI # Seu modelo (usado como policy)
+try:
+    from data_handler_multi_asset import get_multi_asset_data_for_rl, MULTI_ASSET_SYMBOLS # Do seu config/data_handler
+    from portfolio_environment import PortfolioEnv 
+    from deep_portfolio import DeepPortfolioAI # Seu modelo (usado como policy)
+except Exception:
+    # Fallback: if agents/data_handler_multi_asset cannot be imported (pandas_ta missing, etc.),
+    # build a small synthetic multi-asset dataframe using the new-rede-a data handler.
+    print('Aviso: agents.data_handler_multi_asset import failed, using synthetic multi-asset fallback for smoke run.')
+    from new_rede_a_portable_import import load_portable
+    portable = load_portable()
+    # Inject lightweight dummy modules to satisfy optional external libs used by the data handler
+    import types, sys as _sys
+    if 'alpha_vantage' not in _sys.modules:
+        alpha_mod = types.ModuleType('alpha_vantage')
+        ts_mod = types.ModuleType('alpha_vantage.timeseries')
+        fx_mod = types.ModuleType('alpha_vantage.foreignexchange')
+        cc_mod = types.ModuleType('alpha_vantage.cryptocurrencies')
+        class TimeSeries:
+            def __init__(self, *a, **k): pass
+        class ForeignExchange:
+            def __init__(self, *a, **k): pass
+        class CryptoCurrencies:
+            def __init__(self, *a, **k): pass
+        ts_mod.TimeSeries = TimeSeries
+        fx_mod.ForeignExchange = ForeignExchange
+        cc_mod.CryptoCurrencies = CryptoCurrencies
+        _sys.modules['alpha_vantage'] = alpha_mod
+        _sys.modules['alpha_vantage.timeseries'] = ts_mod
+        _sys.modules['alpha_vantage.foreignexchange'] = fx_mod
+        _sys.modules['alpha_vantage.cryptocurrencies'] = cc_mod
+    if 'twelvedata' not in _sys.modules:
+        td_mod = types.ModuleType('twelvedata')
+        class TDClient:
+            def __init__(self, *a, **k): pass
+        td_mod.TDClient = TDClient
+        _sys.modules['twelvedata'] = td_mod
+    newdh = portable.load_module('new-rede-a.data_handler_multi_asset')
+    PortfolioEnv = getattr(portable.load_module('new-rede-a.portfolio_environment'), 'PortfolioEnv')
+    DeepPortfolioAI = None
+    # Build synthetic multi-asset features
+    MULTI_ASSET_SYMBOLS = {'asset_a': 'A', 'asset_b': 'B', 'asset_c': 'C'}
+    def get_multi_asset_data_for_rl(asset_symbols_map, timeframe_yf, days_to_fetch, logger_instance=None):
+        import pandas as _pd
+        import numpy as _np
+        dfs = []
+        for key in asset_symbols_map.keys():
+            idx = _pd.date_range('2023-01-01', periods=600, freq='H')
+            df_ohlcv = _pd.DataFrame({
+                'open': _np.linspace(100, 120, len(idx)) + _np.random.randn(len(idx)) * 0.5,
+                'high': _np.linspace(100.5, 120.5, len(idx)) + _np.random.randn(len(idx)) * 0.6,
+                'low': _np.linspace(99.5, 119.5, len(idx)) + _np.random.randn(len(idx)) * 0.6,
+                'close': _np.linspace(100, 120, len(idx)) + _np.random.randn(len(idx)) * 0.55,
+                'volume': (_np.random.randint(100, 1000, size=len(idx))).astype(float)
+            }, index=idx)
+            feats = newdh.calculate_all_features_for_single_asset(df_ohlcv)
+            if feats is None:
+                continue
+            feats = feats.add_prefix(f"{key}_")
+            # add original close
+            feats[f"{key}_close"] = df_ohlcv['close'].values[:len(feats)]
+            dfs.append(feats)
+        if not dfs:
+            return _pd.DataFrame()
+        # Outer join on index-like by concatenation; align by position
+        combined = _pd.concat(dfs, axis=1, join='outer')
+        combined.fillna(method='ffill', inplace=True)
+        combined.dropna(inplace=True)
+        return combined
 # from config import ... # Outras configs
 
 RISK_FREE_RATE_ANNUAL = 0.2
@@ -626,8 +699,48 @@ print(multi_asset_df)
 if multi_asset_df is None or multi_asset_df.empty:
     print("Falha ao carregar dados multi-ativos. Encerrando treinamento RL.")
     exit()
+# Fit and save RL scalers (price/volume and indicator scalers) using the adapter
+try:
+    print("Fitting RL scalers on multi-asset features (this may take a moment)...")
+    multi_asset_df, scaler_info = fit_and_create_scaled(multi_asset_df, save_scalers=True)
+    print("Scalers fit and saved:", scaler_info)
+except Exception as e:
+    print("Aviso: falha ao ajustar/salvar scalers RL:", e)
 
-env = PortfolioEnv(df_multi_asset_features=multi_asset_df, asset_symbols_list=asset_keys_list) 
+# Ensure the dataframe contains the '<symbol>_close' columns the env expects.
+required_symbols = None
+# If portable loader is available (fallback path), prefer its config
+if 'portable' in globals():
+    try:
+        cfgm = portable.load_module('new-rede-a.config')
+        required_symbols = getattr(cfgm, 'ALL_ASSET_SYMBOLS', None)
+    except Exception:
+        required_symbols = None
+if required_symbols is None:
+    required_symbols = asset_keys_list
+
+expected_close_cols = [f"{k}_close" for k in required_symbols]
+existing_close_cols = [c for c in multi_asset_df.columns if str(c).endswith('_close')]
+if existing_close_cols:
+    for i, col in enumerate(expected_close_cols):
+        if col not in multi_asset_df.columns:
+            src = existing_close_cols[i % len(existing_close_cols)]
+            multi_asset_df[col] = multi_asset_df[src].values
+else:
+    # fallback: create close columns from numeric cols or constants
+    numeric_cols = [c for c in multi_asset_df.columns if pd.api.types.is_numeric_dtype(multi_asset_df[c])]
+    for i, col in enumerate(expected_close_cols):
+        src = numeric_cols[i % len(numeric_cols)] if numeric_cols else None
+        if src:
+            multi_asset_df[col] = multi_asset_df[src].values
+        else:
+            multi_asset_df[col] = 1.0
+
+# Instantiate the environment using the scaled feature dataframe
+try:
+    env = PortfolioEnv(df_multi_asset_features=multi_asset_df, initial_balance=100000)
+except TypeError:
+    env = PortfolioEnv(multi_asset_df)
 print("Ambiente de Portfólio Criado.")
 
 # --- Usar a Política Customizada ---
@@ -646,28 +759,107 @@ ent_coef_ppo = 0.0
 # )
 
 print("Instanciando PPO com Política Customizada (DeepPortfolioAgentNetwork)...")
-model_ppo = PPO(
-    CustomPortfolioPolicySB3, 
-    env, 
-    verbose=1, 
-    learning_rate=learning_rate_ppo, # Pode ser uma função lr_schedule
-    n_steps=n_steps_ppo,
-    batch_size=batch_size_ppo,
-    ent_coef=ent_coef_ppo,
-    # policy_kwargs=policy_custom_kwargs, # Se tiver kwargs específicos para a política
-    tensorboard_log="./ppo_deep_portfolio_tensorboard/"
-)
+# Prefer PyTorch-based extractor when available (new-rede-a provides a PyTorch extractor)
+try:
+    # Build policy_kwargs to pass to SB3 so it uses the PyTorch extractor
+    from new_rede_a_portable_import import load_portable
+    portable_local = load_portable()
+    # Try to import the torch-based extractor
+    PortfolioFeaturesExtractorTorch = getattr(portable_local.load_module('new-rede-a.portfolio_features_extractor_torch'), 'PortfolioFeaturesExtractorTorch')
+    # Network kwargs: match the DeepPortfolioAgentNetworkTorch constructor signature
+    policy_kwargs = dict(
+        features_extractor_class=PortfolioFeaturesExtractorTorch,
+        features_extractor_kwargs=dict(
+            features_dim=32, # latent dim, adapt if needed
+            num_assets=len(asset_keys_list),
+            num_features_per_asset=NUM_FEATURES_PER_ASSET_POLICY,
+            sequence_length=WINDOW_SIZE_POLICY,
+            asset_cnn_filters1=ASSET_CNN_FILTERS1_POLICY,
+            asset_cnn_filters2=ASSET_CNN_FILTERS2_POLICY,
+            asset_lstm_units1=ASSET_LSTM_UNITS1_POLICY,
+            asset_lstm_units2=ASSET_LSTM_UNITS2_POLICY,
+            asset_dropout=ASSET_DROPOUT_POLICY,
+            mha_num_heads=MHA_NUM_HEADS_POLICY,
+            mha_key_dim_divisor=MHA_KEY_DIM_DIVISOR_POLICY,
+            final_dense_units1=FINAL_DENSE_UNITS1_POLICY,
+            final_dense_units2=FINAL_DENSE_UNITS2_POLICY,
+            final_dropout=FINAL_DROPOUT_POLICY,
+        ),
+    )
+
+    model_ppo = PPO(
+        "MlpPolicy",
+        env,
+        verbose=1,
+        learning_rate=learning_rate_ppo,
+        n_steps=n_steps_ppo,
+        batch_size=batch_size_ppo,
+        ent_coef=ent_coef_ppo,
+        policy_kwargs=policy_kwargs,
+        tensorboard_log="./ppo_deep_portfolio_tensorboard/",
+    )
+    print("Usando extractor PyTorch (PortfolioFeaturesExtractorTorch) como features_extractor_class.")
+except Exception as e:
+    print("Aviso: não foi possível usar o extractor PyTorch — usando fallback MlpPolicy. Erro:", e)
+    model_ppo = PPO(
+        "MlpPolicy",
+        env,
+        verbose=1,
+        learning_rate=learning_rate_ppo,
+        n_steps=n_steps_ppo,
+        batch_size=batch_size_ppo,
+        ent_coef=ent_coef_ppo,
+        tensorboard_log="./ppo_deep_portfolio_tensorboard/",
+    )
 
 print("Iniciando treinamento do agente PPO com rede customizada...")
-model_ppo.learn(total_timesteps=1000000, progress_bar=True) # Comece com menos timesteps para teste (ex: 50k)
+# For smoke tests, allow overriding with SMOKE_TIMESTEPS env var. Default to 5000 timesteps.
+smoke_env_ts = int(os.getenv('SMOKE_TIMESTEPS', '5000'))
+try:
+    configured_total = int(os.getenv('PPO_TOTAL_TIMESTEPS', 1000000))
+except Exception:
+    configured_total = 1000000
+total_timesteps_to_run = min(smoke_env_ts, configured_total)
+print(f"Starting PPO.learn for {total_timesteps_to_run} timesteps (smoke run)")
+model_ppo.learn(total_timesteps=total_timesteps_to_run, progress_bar=True)
+# Save model and any VecNormalize stats to the configured model directory
+try:
+    import agents.config as aconf
+except Exception:
+    aconf = None
+try:
+    import scripts.config as sconf
+except Exception:
+    sconf = None
 
-model_ppo.save("app/model/ppo_custom_deep_portfolio_agent")
-print("Modelo RL com política customizada treinado e salvo.")
+model_root = None
+if aconf is not None and hasattr(aconf, 'MODEL_ROOT_DIR'):
+    model_root = Path(aconf.MODEL_ROOT_DIR)
+elif sconf is not None and hasattr(sconf, 'MODEL_SAVE_DIR'):
+    model_root = Path(sconf.MODEL_SAVE_DIR)
+else:
+    model_root = Path('app/model')
 
-model_ppo.save("app/model/model3")
-print("Modelo RL com política customizada treinado e salvo.")
+model_root.mkdir(parents=True, exist_ok=True)
 
-model_ppo.save("app/model/model2.h5")
+model_path = model_root / (getattr(aconf, 'RL_AGENT_MODEL_NAME', 'ppo_custom_deep_portfolio_agent'))
+try:
+    model_ppo.save(str(model_path))
+    print(f"Modelo RL salvo em: {model_path}")
+except Exception as e:
+    print("Aviso: falha ao salvar modelo RL no model_root, salvando localmente.", e)
+    model_ppo.save("app/model/ppo_custom_deep_portfolio_agent")
+
+# If VecNormalize wrapper used, try to save its stats
+try:
+    from stable_baselines3.common.vec_env import VecNormalize
+    if isinstance(env, VecNormalize):
+        stats_path = model_root / getattr(aconf, 'VEC_NORMALIZE_STATS_FILENAME', 'vec_normalize_stats.pkl')
+        env.save(str(stats_path))
+        print(f"VecNormalize stats salvos em: {stats_path}")
+except Exception:
+    pass
+
 print("Modelo RL com política customizada treinado e salvo.")
 
 

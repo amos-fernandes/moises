@@ -2,7 +2,11 @@ from typing import List, Tuple
 import pandas as pd
 import numpy as np
 import ccxt
-import pandas_ta as ta
+try:
+    import pandas_ta as ta
+except Exception:  # keep broad except to catch import errors / distribution name differences
+    ta = None
+    # We'll print a helpful message later when TA functions are invoked.
 from datetime import datetime, timedelta, timezone # Adicionado timezone
 
 # Importa constantes do config.py
@@ -288,14 +292,34 @@ def calculate_technical_indicators(ohlcv_df: pd.DataFrame) -> pd.DataFrame:
             print(f"ALERTA: Após todos os cálculos, colunas de BASE_FEATURE_COLS estão faltando: {missing}")
             print(f"Verifique os cálculos e se as colunas base para eles (open, high, low, close, volume) existem no input.")
             print(f"Colunas disponíveis: {df.columns.tolist()}")
-            # raise ValueError(f"Nem todas as features base foram geradas: {missing}")
+            # continue - we'll still attempt to return whatever exists
+
+        # Ensure some commonly expected derived columns exist (create from ATR when possible)
+        if 'atr' in df.columns:
+            eps = 1e-9
+            if 'open' in df.columns and 'open_div_atr' not in df.columns:
+                df['open_div_atr'] = df['open'] / (df['atr'] + eps)
+            if 'high' in df.columns and 'high_div_atr' not in df.columns:
+                df['high_div_atr'] = df['high'] / (df['atr'] + eps)
+            if 'low' in df.columns and 'low_div_atr' not in df.columns:
+                df['low_div_atr'] = df['low'] / (df['atr'] + eps)
+            if 'close' in df.columns and 'close_div_atr' not in df.columns:
+                df['close_div_atr'] = df['close'] / (df['atr'] + eps)
+            if 'volume' in df.columns and 'volume_div_atr' not in df.columns:
+                df['volume_div_atr'] = df['volume'] / (df['atr'] + eps)
+            if 'sma_10' in df.columns and 'sma_10_div_atr' not in df.columns:
+                df['sma_10_div_atr'] = df['sma_10'] / (df['atr'] + eps)
+
+        # Ensure canonical log_return column name
+        if 'log_return_1' in df.columns and 'log_return' not in df.columns:
+            df['log_return'] = df['log_return_1']
 
         # Selecionar apenas as colunas que realmente existem e estão em BASE_FEATURE_COLS
-        # para evitar erros se alguma não pôde ser calculada.
-        # O script de treino verificará se todas as BASE_FEATURE_COLS existem antes de escalar.
         existing_base_features = [col for col in BASE_FEATURE_COLS if col in df.columns]
         print(f"Indicadores técnicos e features derivadas calculadas. Features retornadas: {existing_base_features}")
-        return df[existing_base_features + (['open', 'high', 'low', 'close', 'volume'] if not any(c in existing_base_features for c in ['open', 'high', 'low', 'close', 'volume']) else [])] # Garante que OHLCV original está lá para calculate_targets, se não for parte das features
+        # Guarantee OHLCV presence if none of them are in existing_base_features
+        ohlcv_fallback = ['open', 'high', 'low', 'close', 'volume']
+        return df[existing_base_features + (ohlcv_fallback if not any(c in existing_base_features for c in ohlcv_fallback) else [])]
 
 
 
@@ -305,7 +329,44 @@ def calculate_technical_indicators(ohlcv_df: pd.DataFrame) -> pd.DataFrame:
         df.dropna(inplace=True) 
         print("Indicadores técnicos calculados e features normalizadas pelo ATR criadas.")
     else:
-        print("pandas_ta não disponível. Verifique a instalação.")
+        print("pandas_ta não disponível. Calculando conjunto mínimo de indicadores fallback.")
+        # Minimal fallback indicators implemented with pandas to allow the pipeline to run
+        # Compute simple log return
+        if 'close' in df.columns:
+            df['log_return_1'] = np.log(df['close'] / df['close'].shift(1))
+
+        # Simple SMA fallbacks
+        try:
+            if 'close' in df.columns:
+                df['sma_10'] = df['close'].rolling(window=10, min_periods=1).mean()
+                df['sma_50'] = df['close'].rolling(window=50, min_periods=1).mean()
+        except Exception:
+            pass
+
+        # Approximate ATR: rolling average of True Range
+        if all(c in df.columns for c in ['high', 'low', 'close']):
+            prev_close = df['close'].shift(1)
+            tr1 = df['high'] - df['low']
+            tr2 = (df['high'] - prev_close).abs()
+            tr3 = (df['low'] - prev_close).abs()
+            true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            df['atr'] = true_range.rolling(window=14, min_periods=1).mean()
+
+        # Body size and normalization by ATR where possible
+        if 'open' in df.columns and 'close' in df.columns:
+            df['body_size'] = (df['close'] - df['open']).abs()
+            if 'atr' in df.columns:
+                # Add small epsilon to avoid division by zero
+                df['body_size_norm_atr'] = df['body_size'] / (df['atr'] + 1e-9)
+
+        # Volume z-score
+        if 'volume' in df.columns:
+            rolling_vol_mean = df['volume'].rolling(window=20, min_periods=1).mean()
+            rolling_vol_std = df['volume'].rolling(window=20, min_periods=1).std()
+            df['volume_zscore'] = (df['volume'] - rolling_vol_mean) / (rolling_vol_std + 1e-9)
+
+        # Drop rows with no useful numeric data (keep original OHLCV rows but ensure no full-NaN rows)
+        df.dropna(how='all', inplace=True)
     return df
 
 def calculate_targets(df: pd.DataFrame, horizon: int, threshold: float) -> pd.DataFrame:
