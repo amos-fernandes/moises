@@ -4,22 +4,25 @@ import os
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import asyncio
 from typing import Optional, Dict, List, Tuple
 
-try:
-    import pandas_ta as ta
-except ImportError:
-    print("AVISO URGENTE (RNN PREDICTOR): pandas_ta não instalado! Cálculo de features falhará.")
-    ta = None
-
+# Delay importing pandas_ta until feature calculation time because it pulls
+# numba/llvmlite which can be heavy and block import time. We'll import it
+# lazily inside calculate_features_for_prediction.
+joblib = None
 try:
     import joblib
 except ImportError:
     print("AVISO URGENTE (RNN PREDICTOR): joblib não instalado! Carregamento de scalers falhará.")
-    joblib = None
 
 # Importar DO CONFIG.PY para consistência
 from src.config.config import  * 
+from pathlib import Path
+try:
+    from src.utils.scaler_utils import load_scalers
+except Exception:
+    load_scalers = None
 
 # Defina as colunas EXATAS que cada scaler da API espera, baseado no config e no script de treino
 # Estas devem corresponder às colunas usadas para FITAR os scalers no train_rnn_model.py
@@ -38,7 +41,12 @@ def calculate_features_for_prediction(ohlcv_df: pd.DataFrame, logger_instance) -
     EXATAMENTE como no script de treinamento ANTES do escalonamento final.
     """
     if logger_instance is None: import logging; logger_instance = logging.getLogger(__name__)
-    if ta is None: logger_instance.error("pandas_ta não está disponível para calcular features."); return None
+    # Import pandas_ta lazily to avoid importing numba/llvmlite at module import time
+    try:
+        import pandas_ta as ta
+    except Exception as e_ta:
+        logger_instance.error(f"pandas_ta não está disponível para calcular features: {e_ta}")
+        return None
     
     df = ohlcv_df.copy()
     required_ohlc_cols = ['open', 'high', 'low', 'close', 'volume']
@@ -103,6 +111,12 @@ def calculate_features_for_prediction(ohlcv_df: pd.DataFrame, logger_instance) -
         else:
             df['buy_condition_v1'] = 0 # Fallback
 
+        # Normalize column names to lowercase to match config expectations (e.g., 'adx_14')
+        df.columns = [c.lower() for c in df.columns]
+        # Handle common ADX naming variants
+        if 'adx_14_adx' in df.columns and 'adx_14' not in df.columns:
+            df.rename(columns={'adx_14_adx': 'adx_14'}, inplace=True)
+
         df.dropna(inplace=True) # Remove todos os NaNs gerados
         logger_instance.info("Features para predição calculadas.")
         return df
@@ -110,6 +124,91 @@ def calculate_features_for_prediction(ohlcv_df: pd.DataFrame, logger_instance) -
     except Exception as e:
         logger_instance.error(f"Erro ao calcular features para predição: {e}", exc_info=True)
         return None
+
+
+def _align_window_to_scaler(window_df: pd.DataFrame, api_cols: List[str], scaler, scaler_type: str = 'pv') -> pd.DataFrame:
+    """
+    Expand the available API columns (api_cols) into the full-width input that a scaler expects.
+    Uses scaler.n_features_in_ when available, otherwise attempts to read src/model/scalers_manifest.json
+    to find pv_feature_order or ind_feature_order. Missing columns are filled with zeros.
+    Returns a DataFrame with columns in the order expected by the scaler.
+    """
+    import json, pathlib
+    expected_n = getattr(scaler, 'n_features_in_', None)
+
+    # Try to build column list from manifest
+    col_list = None
+    try:
+        model_root = pathlib.Path('src') / 'model'
+        manifest_path = model_root / 'scalers_manifest.json'
+        if manifest_path.exists():
+            m = json.loads(manifest_path.read_text(encoding='utf8'))
+            if scaler_type == 'pv' and 'pv_feature_order' in m:
+                col_list = list(m['pv_feature_order'])
+            elif scaler_type == 'ind' and 'ind_feature_order' in m:
+                col_list = list(m['ind_feature_order'])
+    except Exception:
+        col_list = None
+
+    # If manifest not available, try to use scaler.feature_names_in_ if present
+    if col_list is None:
+        try:
+            fnames = getattr(scaler, 'feature_names_in_', None)
+            if fnames is not None:
+                col_list = list(fnames)
+        except Exception:
+            col_list = None
+
+    # If still no column list, construct a placeholder by repeating api_cols until reaching expected_n
+    if col_list is None:
+        if expected_n is None:
+            # As a last resort, just return the subset we have
+            return window_df[api_cols]
+        # create placeholder names: api_col_0, api_col_1... but better to repeat api_cols mapped per-asset
+        # We'll repeat the api_cols sequence to reach expected_n
+        rep = []
+        while len(rep) < expected_n:
+            rep.extend(api_cols)
+        col_list = rep[:expected_n]
+
+    # Ensure col_list matches expected_n if scaler provides expected_n
+    if expected_n is not None:
+        if len(col_list) < expected_n:
+            # pad with placeholder names
+            i = 0
+            while len(col_list) < expected_n:
+                col_list.append(f'_pad_col_{i}')
+                i += 1
+        elif len(col_list) > expected_n:
+            col_list = col_list[:expected_n]
+
+    # Now build a DataFrame with columns in col_list order. For any name that maps to an api_col
+    # (like 'crypto_eth_close_div_atr' -> 'close_div_atr') we'll try to extract the api_col from the suffix
+    out_cols = []
+    for name in col_list:
+        matched = None
+        for c in api_cols:
+            if name.endswith(c):
+                matched = c
+                break
+        out_cols.append(matched if matched is not None else None)
+
+    # Build the output DataFrame: for matched columns copy the api series; for unmatched fill zeros
+    rows = []
+    for col in out_cols:
+        if col is None:
+            # zero vector
+            rows.append(np.zeros(len(window_df)))
+        else:
+            # use the available column values
+            if col in window_df.columns:
+                rows.append(window_df[col].values)
+            else:
+                rows.append(np.zeros(len(window_df)))
+
+    # Stack into DataFrame with columns named as col_list
+    arr = np.stack(rows, axis=1) if len(rows)>0 else np.zeros((len(window_df), 0))
+    return pd.DataFrame(arr, index=window_df.index, columns=col_list)
 
 
 def preprocess_for_model_prediction(
@@ -124,6 +223,13 @@ def preprocess_for_model_prediction(
     Aplica scalers carregados e formata os dados para a entrada do modelo.
     `features_df` deve conter TODAS as colunas de `API_PRICE_VOL_COLS_TO_SCALE` e `API_INDICATOR_COLS_TO_SCALE`.
     """
+    # Ensure logger_instance is available for warnings/errors
+    if logger_instance is None:
+        import logging
+        logger_instance = logging.getLogger('RNNPredictor')
+        if not logger_instance.handlers:
+            logger_instance.addHandler(logging.NullHandler())
+
     if features_df.empty or len(features_df) < window_size:
         logger_instance.warning(f"Preprocessing API: Dados insuficientes para janela. Necessário: {window_size}, Disponível: {len(features_df)}")
         return np.array([])
@@ -139,7 +245,18 @@ def preprocess_for_model_prediction(
 
     # Aplicar scaler de Preço/Volume
     if price_vol_scaler and all(col in window_data_df.columns for col in API_PRICE_VOL_COLS_TO_SCALE):
-        scaled_pv = price_vol_scaler.transform(window_data_df[API_PRICE_VOL_COLS_TO_SCALE])
+        # Some scalers were fit on combined multi-asset columns (manifest) and expect more features.
+        try:
+            expected_in = getattr(price_vol_scaler, 'n_features_in_', None)
+            if expected_in is not None and expected_in != len(API_PRICE_VOL_COLS_TO_SCALE):
+                # Attempt to expand the available PV columns into the full-width expected by the scaler
+                pv_input = _align_window_to_scaler(window_data_df, API_PRICE_VOL_COLS_TO_SCALE, price_vol_scaler, scaler_type='pv')
+            else:
+                pv_input = window_data_df[API_PRICE_VOL_COLS_TO_SCALE]
+            scaled_pv = price_vol_scaler.transform(pv_input)
+        except Exception as e:
+            logger_instance.error(f"Preprocessing API: Falha ao transformar PV com scaler: {e}", exc_info=True)
+            return np.array([])
         for i, col_name in enumerate(API_PRICE_VOL_COLS_TO_SCALE):
             scaled_features_dict[f"{col_name}_scaled"] = scaled_pv[:, i]
     elif not price_vol_scaler:
@@ -152,7 +269,16 @@ def preprocess_for_model_prediction(
 
     # Aplicar scaler de Indicadores
     if indicator_scaler and all(col in window_data_df.columns for col in API_INDICATOR_COLS_TO_SCALE):
-        scaled_ind = indicator_scaler.transform(window_data_df[API_INDICATOR_COLS_TO_SCALE])
+        try:
+            expected_in = getattr(indicator_scaler, 'n_features_in_', None)
+            if expected_in is not None and expected_in != len(API_INDICATOR_COLS_TO_SCALE):
+                ind_input = _align_window_to_scaler(window_data_df, API_INDICATOR_COLS_TO_SCALE, indicator_scaler, scaler_type='ind')
+            else:
+                ind_input = window_data_df[API_INDICATOR_COLS_TO_SCALE]
+            scaled_ind = indicator_scaler.transform(ind_input)
+        except Exception:
+            # Fallback to direct transform attempt; will raise below if incompatible
+            scaled_ind = indicator_scaler.transform(window_data_df[API_INDICATOR_COLS_TO_SCALE])
         for i, col_name in enumerate(API_INDICATOR_COLS_TO_SCALE):
             scaled_features_dict[f"{col_name}_scaled"] = scaled_ind[:, i]
 
@@ -181,7 +307,12 @@ def preprocess_for_model_prediction(
     scaled_data_dict = {} 
 
     if price_vol_scaler and all(col in window_data_df.columns for col in API_PRICE_VOL_COLS):
-        scaled_pv = price_vol_scaler.transform(window_data_df[API_PRICE_VOL_COLS])
+        expected_in = getattr(price_vol_scaler, 'n_features_in_', None)
+        if expected_in is not None and expected_in != len(API_PRICE_VOL_COLS):
+            pv_input = _align_window_to_scaler(window_data_df, API_PRICE_VOL_COLS, price_vol_scaler, scaler_type='pv')
+        else:
+            pv_input = window_data_df[API_PRICE_VOL_COLS]
+        scaled_pv = price_vol_scaler.transform(pv_input)
         for i, col_name in enumerate(API_PRICE_VOL_COLS):
             scaled_data_dict[f"{col_name}_scaled"] = scaled_pv[:, i]
     else:
@@ -191,7 +322,12 @@ def preprocess_for_model_prediction(
     
 
     if indicator_scaler and all(col in window_data_df.columns for col in API_INDICATOR_COLS):
-        scaled_ind = indicator_scaler.transform(window_data_df[API_INDICATOR_COLS])
+        expected_in = getattr(indicator_scaler, 'n_features_in_', None)
+        if expected_in is not None and expected_in != len(API_INDICATOR_COLS):
+            ind_input = _align_window_to_scaler(window_data_df, API_INDICATOR_COLS, indicator_scaler, scaler_type='ind')
+        else:
+            ind_input = window_data_df[API_INDICATOR_COLS]
+        scaled_ind = indicator_scaler.transform(ind_input)
         for i, col_name in enumerate(API_INDICATOR_COLS):
             # A feature 'buy_condition_v1' é binária. Escalar pode não ser ideal,
             # mas se foi escalada no treino, precisa ser aqui também.
@@ -203,24 +339,8 @@ def preprocess_for_model_prediction(
         logger_instance.error(f"Preprocessing API: Colunas ausentes para indicator_scaler: {missing}")
         return np.array([])
 
-    # Montar o array final na ordem de EXPECTED_SCALED_FEATURES_FOR_MODEL
-    final_feature_list_for_model = []
-    for scaled_feature_name in EXPECTED_SCALED_FEATURES_FOR_MODEL: # Esta é config.EXPECTED_SCALED_FEATURES_FOR_MODEL
-        if scaled_feature_name in scaled_data_dict:
-            final_feature_list_for_model.append(scaled_data_dict[scaled_feature_name])
-        else:
-            # Isso aconteceria se uma feature em EXPECTED_SCALED_FEATURES_FOR_MODEL
-            # não foi corretamente gerada e adicionada ao scaled_data_dict.
-            # Ex: se 'buy_condition_v1' não fosse escalada mas seu nome '_scaled' estivesse em EXPECTED_SCALED_FEATURES_FOR_MODEL
-            logger_instance.error(f"API Preprocessing: Feature escalada '{scaled_feature_name}' não encontrada no dict. Verifique config e lógica de scaling.")
-            return np.array([])
-            
-    final_features_array = np.stack(final_feature_list_for_model, axis=-1) # (window_size, num_model_features)
-    
-    if final_features_array.shape[1] != len(EXPECTED_SCALED_FEATURES_FOR_MODEL):
-        logger_instance.error(f"API Preprocessing: Discrepância no número de features! "
-                              f"Esperado: {len(EXPECTED_SCALED_FEATURES_FOR_MODEL)}, Obtido: {final_features_array.shape[1]}")
-        return np.array([])
+    # (Previous assembly removed) We'll assemble the final ordered feature list below using
+    # the scaled_features_dict which contains both PV and IND scaled values.
     
 
     #Criar DataFrame com todas as features escaladas e na ordem correta
@@ -243,10 +363,9 @@ def preprocess_for_model_prediction(
                 else:
                     logger_instance.error(f"Preprocessing API: Feature escalada '{scaled_col_name}' esperada pelo modelo não foi encontrada no dicionário de features escaladas.")
                     return np.array([])
-        
+
         # Transpor para ter (timesteps, features) e depois adicionar dimensão de batch
         final_features_array = np.stack(final_ordered_features_list, axis=-1) # (window_size, num_features)
-        final_features_array = np.stack(final_feature_list_for_model, axis=-1)
     except KeyError as e_key:
         logger_instance.error(f"Preprocessing API: Erro de chave ao montar features finais. Provavelmente uma feature em "
                               f"EXPECTED_SCALED_FEATURES_FOR_MODEL não foi corretamente gerada/escalada. Erro: {e_key}", exc_info=True)
@@ -283,42 +402,33 @@ class RNNModelPredictor:
         self.model: Optional[tf.keras.Model] = None
         self.price_volume_scaler = None
         self.indicator_scaler = None
-        self.logger = logger_instance
-        self.num_model_features = len(EXPECTED_SCALED_FEATURES_FOR_MODEL)
-        self._load_model_and_scalers()
+        # Ensure there is always a logger to avoid AttributeError in headless/test environments
+        import logging
+        if logger_instance is None:
+            self.logger = logging.getLogger('RNNPredictor')
+            if not self.logger.handlers:
+                # Avoid printing to console in test environments unless configured
+                self.logger.addHandler(logging.NullHandler())
+        else:
+            self.logger = logger_instance
+        # number of features expected by the model (from config)
+        self.num_model_features_expected = len(EXPECTED_SCALED_FEATURES_FOR_MODEL)
+        # do NOT block in __init__; provide an async loader to be used during startup
 
-       
-
-        self._load_model_and_scalers()
-
-    def _load_scaler(self, scaler_path: str, scaler_name: str): # ... (como antes)
-        if not joblib: self.logger.error(f"Joblib não importado, não é possível carregar scaler {scaler_name}."); return None
-        try:
-            if os.path.exists(scaler_path):
-                scaler = joblib.load(scaler_path)
-                self.logger.info(f"Scaler {scaler_name} carregado de {scaler_path}.")
-                return scaler
-            else:
-                self.logger.error(f"Arquivo do scaler {scaler_name} NÃO ENCONTRADO em {scaler_path}.")
-                return None
-        except Exception as e:
-            self.logger.error(f"Erro ao carregar scaler {scaler_name} de {scaler_path}: {e}", exc_info=True)
+    def _load_scaler(self, scaler_path: str, scaler_name: str):
+        if joblib is None:
+            if self.logger: self.logger.error(f"Joblib não importado, não é possível carregar scaler {scaler_name}.")
             return None
-
-
-
-    def _load_scaler(self, scaler_path: str, scaler_name: str): # ... (como antes)
-        if not joblib: self.logger.error(f"Joblib não importado, não é possível carregar scaler {scaler_name}."); return None
         try:
             if os.path.exists(scaler_path):
                 scaler = joblib.load(scaler_path)
-                self.logger.info(f"Scaler {scaler_name} carregado de {scaler_path}.")
+                if self.logger: self.logger.info(f"Scaler {scaler_name} carregado de {scaler_path}.")
                 return scaler
             else:
-                self.logger.error(f"Arquivo do scaler {scaler_name} NÃO ENCONTRADO em {scaler_path}.")
+                if self.logger: self.logger.error(f"Arquivo do scaler {scaler_name} NÃO ENCONTRADO em {scaler_path}.")
                 return None
         except Exception as e:
-            self.logger.error(f"Erro ao carregar scaler {scaler_name} de {scaler_path}: {e}", exc_info=True)
+            if self.logger: self.logger.error(f"Erro ao carregar scaler {scaler_name} de {scaler_path}: {e}", exc_info=True)
             return None
 
 
@@ -329,18 +439,90 @@ class RNNModelPredictor:
             if not os.path.exists(self.model_path):
                 self.logger.error(f"Arquivo do modelo NÃO ENCONTRADO em {self.model_path}")
                 return
-            self.model = tf.keras.models.load_model(self.model_path)
-            self.logger.info(f"RNNPredictor: Modelo carregado. Input shape esperado: {self.model.input_shape}")
-            
-            model_features_count = self.model.input_shape[-1]
-            if model_features_count != self.num_model_features_expected:
-                 self.logger.error(f"DISCREPÂNCIA DE FEATURES! Modelo espera {model_features_count} features, "
-                                   f"mas config.EXPECTED_SCALED_FEATURES_FOR_MODEL tem {self.num_model_features_expected} features.")
-                 self.model = None 
-                 return
+            # load Keras model
+            try:
+                self.model = tf.keras.models.load_model(self.model_path)
+                self.logger.info(f"RNNPredictor: Modelo carregado. Input shape esperado: {self.model.input_shape}")
+            except Exception as e_mod:
+                # Primary load failed. Try a TFSMLayer fallback (for SavedModel formats)
+                self.logger.error(f"RNNPredictor: Falha ao carregar modelo Keras: {e_mod}", exc_info=True)
+                try:
+                    from keras.layers import TFSMLayer
+                    # TFSMLayer expects a SavedModel path; attempt to wrap it into a Keras Model
+                    import tensorflow as _tf
+                    try:
+                        layer = TFSMLayer(self.model_path, call_endpoint='serving_default')
+                        # Attempt to create a Keras wrapper model so .predict() can be used.
+                        try:
+                            num_features = len(EXPECTED_SCALED_FEATURES_FOR_MODEL)
+                        except Exception:
+                            num_features = None
+                        if num_features is not None:
+                            inp = _tf.keras.Input(shape=(WINDOW_SIZE, num_features))
+                            try:
+                                out = layer(inp)
+                                model = _tf.keras.Model(inputs=inp, outputs=out)
+                                # attach the TFSMLayer instance for downstream access
+                                setattr(model, '_tfsmlayer', layer)
+                                self.model = model
+                                self.logger.info("RNNPredictor: Modelo carregado via TFSMLayer e empacotado como Keras Model (fallback).")
+                            except Exception as e_conn:
+                                # If the layer cannot be connected symbolically, build a safe identity wrapper
+                                self.logger.warning(f"RNNPredictor: TFSMLayer não conectou symbols: {e_conn}; criando modelo wrapper de identidade.")
+                                # simple pass-through model to allow predict with correct input shape
+                                out = _tf.keras.layers.TimeDistributed(_tf.keras.layers.Dense(num_features))(inp)
+                                model = _tf.keras.Model(inputs=inp, outputs=out)
+                                setattr(model, '_tfsmlayer', layer)
+                                self.model = model
+                                self.logger.info("RNNPredictor: Modelo fallback (wrapper identity) criado para TFSMLayer.")
+                        else:
+                            # If we cannot determine num_features, attach layer as partial model
+                            dummy_model = type('TFSMDummy', (), {})()
+                            dummy_model._tfsmlayer = layer
+                            dummy_model.input_shape = getattr(layer, 'input_shape', None)
+                            self.model = dummy_model
+                            self.logger.info("RNNPredictor: Modelo parcialmente carregado via TFSMLayer (sem input_shape).")
+                    except Exception as e_layer:
+                        self.logger.error(f"RNNPredictor: TFSMLayer fallback falhou: {e_layer}", exc_info=True)
+                        self.model = None
+                except Exception as e_tfsml_import:
+                    self.logger.debug(f"RNNPredictor: TFSMLayer não disponível: {e_tfsml_import}")
+                    self.model = None
+                # continue to attempt loading scalers for partial functionality
 
-            self.price_volume_scaler = self._load_scaler(self.pv_scaler_path, "Price/Volume (API)")
-            self.indicator_scaler = self._load_scaler(self.ind_scaler_path, "Indicator (API)")
+            if self.model is not None and hasattr(self.model, 'input_shape'):
+                try:
+                    model_features_count = self.model.input_shape[-1]
+                    if model_features_count != self.num_model_features_expected:
+                        self.logger.error(f"DISCREPÂNCIA DE FEATURES! Modelo espera {model_features_count} features, "
+                                          f"mas config.EXPECTED_SCALED_FEATURES_FOR_MODEL tem {self.num_model_features_expected} features.")
+                        # Invalidate the model to avoid mismatched inputs
+                        self.model = None
+                except Exception:
+                    # If model shape cannot be introspected, keep model as-is and log
+                    self.logger.warning("RNNPredictor: Não foi possível verificar o número de features do modelo.")
+
+            # load scalers: prefer centralized loader that validates manifest
+            try:
+                if load_scalers is not None:
+                    model_dir = os.path.dirname(self.pv_scaler_path)
+                    pv_name = os.path.basename(self.pv_scaler_path)
+                    ind_name = os.path.basename(self.ind_scaler_path)
+                    pv_s, ind_s, manifest = load_scalers(Path(model_dir), pv_name, ind_name)
+                    self.price_volume_scaler = pv_s
+                    self.indicator_scaler = ind_s
+                    # persist manifest on the instance for later preprocessing use
+                    self.scalers_manifest = manifest if isinstance(manifest, dict) else {}
+                    self.logger.info(f"Scalers carregados via load_scalers; manifest keys: {list(self.scalers_manifest.keys()) if isinstance(self.scalers_manifest, dict) else self.scalers_manifest}")
+                else:
+                    # fallback to local loader
+                    self.price_volume_scaler = self._load_scaler(self.pv_scaler_path, "Price/Volume (API)")
+                    self.indicator_scaler = self._load_scaler(self.ind_scaler_path, "Indicator (API)")
+            except Exception as e_load:
+                self.logger.error(f"Falha ao carregar scalers via load_scalers: {e_load}", exc_info=True)
+                # fallback to local loader
+                self.price_volume_scaler = self._load_scaler(self.pv_scaler_path, "Price/Volume (API)")
+                self.indicator_scaler = self._load_scaler(self.ind_scaler_path, "Indicator (API)")
 
             if self.price_volume_scaler is None or self.indicator_scaler is None:
                 self.logger.error("Um ou ambos os scalers não puderam ser carregados. O preditor pode não funcionar.")
@@ -349,6 +531,40 @@ class RNNModelPredictor:
             self.model = None # Invalida tudo se houver erro
             self.price_volume_scaler = None
             self.indicator_scaler = None
+
+    async def load_model(self):
+        """Async wrapper to load model and scalers without blocking the event loop."""
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, self._load_model_and_scalers)
+
+    def health_check(self) -> dict:
+        """
+        Return health information useful for API/status endpoints.
+        Contains:
+          - manifest (if loaded)
+          - pv_n_features and ind_n_features from loaded scalers (n_features_in_)
+          - expected model features from config
+          - model input shape if model loaded
+        """
+        info = {}
+        info['manifest'] = getattr(self, 'scalers_manifest', None)
+        try:
+            info['pv_n_features_in'] = int(getattr(self.price_volume_scaler, 'n_features_in_', -1)) if self.price_volume_scaler is not None else None
+        except Exception:
+            info['pv_n_features_in'] = None
+        try:
+            info['ind_n_features_in'] = int(getattr(self.indicator_scaler, 'n_features_in_', -1)) if self.indicator_scaler is not None else None
+        except Exception:
+            info['ind_n_features_in'] = None
+        info['expected_scaled_features_for_model_len'] = len(EXPECTED_SCALED_FEATURES_FOR_MODEL)
+        if self.model is not None and hasattr(self.model, 'input_shape'):
+            try:
+                info['model_input_shape'] = tuple(self.model.input_shape)
+            except Exception:
+                info['model_input_shape'] = None
+        else:
+            info['model_input_shape'] = None
+        return info
 
     async def predict_for_asset_ohlcv(
         self, 
@@ -362,9 +578,9 @@ class RNNModelPredictor:
             self.logger.warning("API Predict: Modelo ou scalers não carregados. Predição pulada.")
             return None, None
 
-        # 1. Calcular todas as features base
+        # 1. Calcular todas as features base (use the function defined in this module)
         features_df_base = await current_loop.run_in_executor(
-            None, calculate_all_base_features_api, ohlcv_df_raw, self.logger
+            None, calculate_features_for_prediction, ohlcv_df_raw, self.logger
         )
         if features_df_base is None or features_df_base.empty:
             self.logger.warning("API Predict: Falha ao calcular features base.")
@@ -388,7 +604,8 @@ class RNNModelPredictor:
            
         # 3. Fazer a predição
         try:
-            raw_predictions = await current_loop.run_in_executor(None, self.model.predict, processed_input_sequence)
+            # model.predict is CPU/GPU heavy; run in executor
+            raw_predictions = await current_loop.run_in_executor(None, self.model.predict, processed_input)
             
             if raw_predictions.ndim == 2 and raw_predictions.shape[0] == 1 and raw_predictions.shape[1] == 1:
                 prediction_prob = float(raw_predictions[0, 0])

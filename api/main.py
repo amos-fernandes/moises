@@ -81,3 +81,39 @@ async def index():
         content = '<html><body><h1>ATCoin Neural Agents</h1></body></html>'
     return HTMLResponse(content)
     return HTMLResponse(content)
+
+
+# Health endpoint for model/scalers
+def safe_import_predictor():
+    try:
+        mod = __import__('src.model.rnn_predictor', fromlist=['RNNModelPredictor'])
+        return getattr(mod, 'RNNModelPredictor')
+    except Exception as e:
+        logger.warning(f"Could not import RNNModelPredictor: {e}")
+        return None
+
+
+@app.get('/health/model')
+async def model_health():
+    """Return model + scaler health information using RNNModelPredictor.health_check()."""
+    PredictorCls = safe_import_predictor()
+    if PredictorCls is None:
+        return {"ok": False, "reason": "RNNModelPredictor not importable"}
+
+    try:
+        predictor = PredictorCls(logger_instance=logger)
+        # Ensure model and scalers are loaded (async loader available)
+        try:
+            await predictor.load_model()
+        except Exception:
+            # Fallback: run sync loader in threadpool
+            import asyncio
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, predictor._load_model_and_scalers)
+
+        info = predictor.health_check()
+        info['ok'] = True
+        return info
+    except Exception as e:
+        logger.error(f"Error while getting model health: {e}", exc_info=True)
+        return {"ok": False, "reason": str(e)}

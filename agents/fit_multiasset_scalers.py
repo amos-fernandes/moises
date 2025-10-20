@@ -182,6 +182,8 @@ def main():
     print(f'PV cols count: {len(pv_cols)}, IND cols count: {len(ind_cols)}')
 
     from sklearn.preprocessing import MinMaxScaler
+    from pathlib import Path as _Path
+    from src.utils.scaler_utils import save_scalers
     pv_scaler = MinMaxScaler()
     ind_scaler = MinMaxScaler()
 
@@ -212,52 +214,21 @@ def main():
     pv_scaler.fit(Xpv.values)
     ind_scaler.fit(Xind.values)
 
-    # backup existing
-    pv_path = MODEL_DIR / PV_NAME
-    ind_path = MODEL_DIR / IND_NAME
-    backup(pv_path)
-    backup(ind_path)
-
-    joblib.dump(pv_scaler, pv_path)
-    joblib.dump(ind_scaler, ind_path)
-
-    print(f'Saved multi-asset scalers to {pv_path} and {ind_path}')
-    n_pv = getattr(pv_scaler, 'n_features_in_', None)
-    if n_pv is None:
-        try:
-            n_pv = getattr(pv_scaler, 'scale_', None).shape[0]
-        except Exception:
-            n_pv = None
-    n_ind = getattr(ind_scaler, 'n_features_in_', None)
-    if n_ind is None:
-        try:
-            n_ind = getattr(ind_scaler, 'scale_', None).shape[0]
-        except Exception:
-            n_ind = None
-    print('n_features pv:', n_pv)
-    print('n_features ind:', n_ind)
-
-    # Write a manifest describing the exact concatenated feature order so loaders can validate
+    # Save scalers and manifest using centralized utility
+    model_dir_path = _Path(MODEL_DIR)
+    manifest = {
+        'assets': assets_sorted,
+        'base_features': base_cols,
+        'ordered_cols': ordered_cols,
+        'pv_feature_order': pv_cols,
+        'ind_feature_order': ind_cols,
+    }
     try:
-        manifest = {
-            'created_at': pd.Timestamp.utcnow().isoformat() + 'Z',
-            'assets': assets_sorted,
-            'base_features': base_cols,
-            'ordered_cols': ordered_cols,
-            'pv_feature_order': pv_cols,
-            'ind_feature_order': ind_cols,
-            'pv_n_features': int(n_pv) if n_pv is not None else None,
-            'ind_n_features': int(n_ind) if n_ind is not None else None,
-        }
-        manifest_path = MODEL_DIR / 'scalers_manifest.json'
-        backup(manifest_path)
-        with manifest_path.open('w', encoding='utf-8') as mf:
-            import json
-
-            json.dump(manifest, mf, indent=2, ensure_ascii=False)
-        print(f'Wrote scalers manifest to {manifest_path}')
+        written_manifest = save_scalers(pv_scaler, ind_scaler, model_dir_path, PV_NAME, IND_NAME, manifest=manifest)
+        print(f'Saved multi-asset scalers to {model_dir_path / PV_NAME} and {model_dir_path / IND_NAME}')
+        print('manifest:', written_manifest)
     except Exception as e:
-        print(f'Warning: could not write scalers manifest: {e}')
+        print(f'Warning: could not save scalers/manifest: {e}')
 
 
 if __name__ == '__main__':

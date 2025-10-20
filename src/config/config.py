@@ -2,12 +2,48 @@
 
 # --- Parâmetros de Dados ---
 SYMBOL = 'BTC/USDT'  # Ativo principal para o modelo de classificação (se ainda usar)
-MULTI_ASSET_SYMBOLS = { # Para o agente de portfólio RL
-    'eth': 'ETH-USD',  # Chave amigável: ticker_yfinance
-    'btc': 'BTC-USD',
-    'ada': 'ADA-USD',
-    'sol': 'SOL-USD'
+
+# ASSET_CONFIGS: groups of assets and their default data interval.
+# These are the exact targets used during training and should be
+# the canonical source for downstream modules.
+ASSET_CONFIGS = {
+    "STOCKS": {
+        "AAPL": {"interval": "60min"},
+        "MSFT": {"interval": "60min"},
+        "GOOGL": {"interval": "60min"},
+        "AMZN": {"interval": "60min"},
+        "NVDA": {"interval": "60min"},
+        "TSLA": {"interval": "60min"},
+        "PETR4.SA": {"interval": "60min"},
+        "VALE3.SA": {"interval": "60min"},
+    },
+    "FOREX": {
+        "EURUSD": {"interval": "60min"},
+        "GBPUSD": {"interval": "60min"},
+    },
+    "CRYPTO": {
+        # Use slash in user config but normalize for internal use where needed
+        "BTC/USD": {"interval": "60min"},
+        "ETH/USD": {"interval": "60min"},
+    }
 }
+
+# Flatten ASSET_CONFIGS into MULTI_ASSET_SYMBOLS: a mapping used by data loaders
+# and execution code where values are the canonical ticker strings. We normalize
+# crypto tickers to the dash form (e.g. 'BTC-USD') which is commonly used by
+# yfinance and some internal utilities; other modules that need 'BTC/USD' can
+# convert as needed.
+MULTI_ASSET_SYMBOLS = {}
+for group, assets in ASSET_CONFIGS.items():
+    for symbol in assets.keys():
+        # Normalize crypto tickers with '/' to dash '-' for consistency
+        normalized = symbol.replace('/', '-').upper()
+        # Build a friendly key by lowercasing and stripping dots/slashes
+        friendly_key = normalized.split('-')[0].replace('.', '').lower()
+        # Ensure unique keys by appending group prefix when collisions may occur
+        if friendly_key in MULTI_ASSET_SYMBOLS:
+            friendly_key = f"{group.lower()}_{friendly_key}"
+        MULTI_ASSET_SYMBOLS[friendly_key] = normalized
 NUM_ASSETS_PORTFOLIO = len(MULTI_ASSET_SYMBOLS) # Número de ativos no portfólio
 NUM_ASSETS=4
 TIMEFRAME = '1h' # Usado tanto para yfinance quanto para ccxt (se adaptar)

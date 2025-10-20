@@ -1,0 +1,21 @@
+http://127.0.0.1:8001/api/rnn_investment_result_callback : O termo 
+'http://127.0.0.1:8001/api/rnn_investment_result_callback' n∆o Ç reconhecido como nome de cmdlet, funá∆o, arquivo de 
+script ou programa oper†vel. Verifique a grafia do nome ou, se um caminho tiver sido inclu°do, veja se o caminho est† 
+correto e tente novamente.
+No linha:1 caractere:77
++ ... ALLBACK_URL=http://127.0.0.1:8001/api/rnn_investment_result_callback; ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (http://127.0.0....result_callback:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+super_secret_for_callback_signing : O termo 'super_secret_for_callback_signing' n∆o Ç reconhecido como nome de cmdlet, 
+funá∆o, arquivo de script ou programa oper†vel. Verifique a grafia do nome ou, se um caminho tiver sido inclu°do, veja 
+se o caminho est† correto e tente novamente.
+No linha:1 caractere:163
++ ... $env:CALLBACK_SHARED_SECRET=super_secret_for_callback_signing; $env:F ...
++                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (super_secret_for_callback_signing:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+INFO:     Started server process [19732]
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)

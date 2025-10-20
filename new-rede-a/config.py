@@ -40,9 +40,9 @@ ASSET_CONFIGS = {
 }
 
 # Default API keys placeholders (substitua por valores reais no scripts/config.py)
-FINNHUB_API_KEY = None
-TWELVE_DATA_API_KEY = None
-ALPHA_VANTAGE_API_KEY = None
+FINNHUB_API_KEY = "d3ledrhr01qq28en5ebgd3ledrhr01qq28en5ec0"
+TWELVE_DATA_API_KEY = "8798569186934c3089c169619aea9975"
+ALPHA_VANTAGE_API_KEY = "0BZTLZG8FP5KZHFV"
 
 # Cache defaults
 CACHE_DIR = "./data_cache"

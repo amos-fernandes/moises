@@ -2,6 +2,7 @@
 
 import ccxt.async_support as ccxt
 import asyncio
+import time
 from typing import Any, Dict, List, Optional, Tuple
 import logging
 import os
@@ -14,6 +15,7 @@ CCXT_API_KEY = os.environ.get("CCXT_API_KEY")
 CCXT_API_SECRET = os.environ.get("CCXT_API_SECRET")
 CCXT_API_PASSWORD = os.environ.get("CCXT_API_PASSWORD")
 CCXT_SANDBOX_MODE = os.environ.get("CCXT_SANDBOX_MODE", "false").lower() == "true"
+CCXT_DRY_RUN = os.environ.get("CCXT_DRY_RUN", "false").lower() == "true"
 
 from src.config.config import MULTI_ASSET_SYMBOLS
 
@@ -30,21 +32,87 @@ async def get_ccxt_exchange(logger_instance: Optional[logging.Logger] = None):
     logger.info(f"Inicializando exchange: {CCXT_EXCHANGE_ID}")
     
     exchange_class = getattr(ccxt, CCXT_EXCHANGE_ID)
+    # First fetch server time using a temporary unauthenticated client so we can compute drift
+    drift_ms = 0
+    try:
+        temp = exchange_class({'enableRateLimit': True, 'timeout': 10000})
+        try:
+            server_time = await temp.fetch_time()
+            now_ms = int(time.time() * 1000)
+            drift_ms = int(server_time - now_ms)
+            logger.debug(f"Pre-init time sync: server_time={server_time}, local_time={now_ms}, drift_ms={drift_ms}")
+        except Exception:
+            logger.debug('Pre-init fetch_time failed; will proceed without pre-computed drift.')
+        finally:
+            if hasattr(temp, 'close'):
+                await temp.close()
+    except Exception:
+        logger.debug('Could not create temporary exchange for time sync; proceeding.')
+
+    # instantiate the authenticated exchange and pass the computed timeDifference so CCXT signs correctly
     exchange = exchange_class({
         'apiKey': CCXT_API_KEY,
         'secret': CCXT_API_SECRET,
         'password': CCXT_API_PASSWORD,
         'enableRateLimit': True,
+        'timeout': 30000,
+        # recvWindow helps avoid Timestamp/recvWindow errors for Binance
         'options': {
-            'defaultType': 'spot'  # ou 'future' se for usar alavancagem
+            'defaultType': 'spot',  # or 'future' if using leverage
+            'adjustForTimeDifference': True,
+            'recvWindow': 60000,
+            'timeDifference': drift_ms,
         }
     })
 
     try:
-        # Testa a conexão
-        await exchange.fetch_time()
-        logger.info(f"✅ Conexão com {CCXT_EXCHANGE_ID} estabelecida com sucesso.")
+        # Testa a conexão via fetch_time quando suportado
+        server_time = await exchange.fetch_time()
+        # compute and apply explicit time-difference to help CCXT timestamping
+        try:
+            now_ms = int(time.time() * 1000)
+            drift_ms = int(server_time - now_ms)
+            # store in options so CCXT uses it when signing requests
+            exchange.options['timeDifference'] = drift_ms
+            logger.info(f"Time sync with {CCXT_EXCHANGE_ID}: server_time={server_time}, local_time={now_ms}, drift_ms={drift_ms}")
+        except Exception:
+            logger.debug('Could not compute/apply time difference.')
+
+        # Pre-load markets to warm up CCXT
+        try:
+            await exchange.load_markets()
+        except Exception:
+            logger.debug("load_markets failed during initialization, will retry later if needed.")
+
+        logger.info(f"✅ Conexão com {CCXT_EXCHANGE_ID} estabelecida com sucesso (fetch_time).")
         return exchange
+    except Exception as e:
+        # Algumas exchanges (ex: bitfinex) não implementam fetch_time(); tentar alternativa
+        msg = str(e).lower()
+        if 'fetchtime' in msg or 'not supported' in msg or 'fetch_time' in msg:
+            logger.warning(f"fetch_time() não suportado por {CCXT_EXCHANGE_ID} (fallback). Erro: {e}. Tentando load_markets() como verificação.")
+            try:
+                await exchange.load_markets()
+                logger.info(f"✅ Conexão com {CCXT_EXCHANGE_ID} estabelecida com sucesso (load_markets fallback).")
+                return exchange
+            except Exception as e_load:
+                logger.critical(f"❌ Falha ao inicializar {CCXT_EXCHANGE_ID} usando load_markets(): {e_load}", exc_info=True)
+                if hasattr(exchange, 'close'):
+                    await exchange.close()
+                return None
+        # Authentication / network handling
+        if isinstance(e, ccxt.AuthenticationError):
+            logger.critical(f"❌ Autenticação falhou: chaves inválidas ou sem permissão. Erro: {e}")
+            await exchange.close()
+            return None
+        if isinstance(e, ccxt.NetworkError):
+            logger.error(f"⚠️  Erro de rede ao conectar com {CCXT_EXCHANGE_ID}: {e}")
+            await exchange.close()
+            return None
+        logger.critical(f"❌ Erro inesperado ao conectar com {CCXT_EXCHANGE_ID}: {e}", exc_info=True)
+        if hasattr(exchange, 'close'):
+            await exchange.close()
+        return None
     except ccxt.AuthenticationError as e:
         logger.critical(f"❌ Autenticação falhou: chaves inválidas ou sem permissão. Erro: {e}")
         await exchange.close()
@@ -166,7 +234,14 @@ async def execute_portfolio_rebalance(
         for trade in sorted(orders_to_sell, key=lambda x: x['diff_usd']): # Vende os maiores primeiro
             symbol_to_sell = trade['symbol']
             usd_to_sell = abs(trade['diff_usd'])
-            market_symbol = f"{symbol_to_sell}/{quote_currency}"
+            # normalize symbols like 'ETH-USD' or 'ETH/USD' -> 'ETH'
+            if '-' in symbol_to_sell:
+                base_sym = symbol_to_sell.split('-')[0]
+            elif '/' in symbol_to_sell:
+                base_sym = symbol_to_sell.split('/')[0]
+            else:
+                base_sym = symbol_to_sell
+            market_symbol = f"{base_sym}/{quote_currency}"
             
             try:
                 # Converter valor em USD para quantidade do ativo
@@ -193,7 +268,7 @@ async def execute_portfolio_rebalance(
                 results['orders'].append(order)
                 
             except Exception as e_sell:
-                error_msg = f"Erro ao executar ordem de VENDA para {symbol_to_sell}: {e}"
+                error_msg = f"Erro ao executar ordem de VENDA para {symbol_to_sell}: {e_sell}"
                 logger.error(error_msg, exc_info=True)
                 results['errors'].append(error_msg)
 
@@ -213,29 +288,64 @@ async def execute_portfolio_rebalance(
             logger.warning(f"Capital necessário para compras (${total_usd_to_buy:,.2f}) excede o saldo disponível (${available_usd:,.2f}). As ordens serão escaladas.")
             allocation_factor = available_usd / total_usd_to_buy
 
-        for trade in sorted(orders_to_buy, key=lambda x: x['diff_usd'], reverse=True): # Compra os maiores primeiro
+        for trade in sorted(orders_to_buy, key=lambda x: x['diff_usd'], reverse=True):  # Compra os maiores primeiro
             symbol_to_buy = trade['symbol']
             usd_to_buy = trade['diff_usd'] * allocation_factor
-            market_symbol = f"{symbol_to_buy}/{quote_currency}"
-            
+            # normalize as for sells
+            if '-' in symbol_to_buy:
+                base_sym_b = symbol_to_buy.split('-')[0]
+            elif '/' in symbol_to_buy:
+                base_sym_b = symbol_to_buy.split('/')[0]
+            else:
+                base_sym_b = symbol_to_buy
+            market_symbol = f"{base_sym_b}/{quote_currency}"
+
             try:
-                # Checar se a ordem atende ao custo mínimo da exchange
-                market_info = exchange.markets[market_symbol]
-                min_cost = market_info.get('limits', {}).get('cost', {}).get('min')
+                # Checar se a ordem atende ao custo mínimo da exchange (markets may not be present)
+                market_info = exchange.markets.get(market_symbol) if hasattr(exchange, 'markets') else None
+                min_cost = None
+                if market_info:
+                    min_cost = market_info.get('limits', {}).get('cost', {}).get('min')
                 if min_cost and usd_to_buy < min_cost:
                     logger.info(f"Ordem de compra para {symbol_to_buy} (custo ${usd_to_buy:,.2f}) abaixo do mínimo (${min_cost}). Pulando.")
                     continue
-                
+
                 logger.info(f"Executando Market Buy: ${usd_to_buy:,.2f} de {market_symbol}")
-                # CCXT v2+ usa `amount` para market buy orders, mas algumas exchanges usam `cost`
-                # Para market buy com valor em USD, precisamos especificar o `cost`
-                # `create_market_buy_order_with_cost` ou params
-                params = {'quoteOrderQty': usd_to_buy} # Para Binance, comprar com USDT
-                order = await exchange.create_market_buy_order(market_symbol, None, params)
-                results['orders'].append(order)
-                
+                # CCXT differences: some exchanges (Binance) allow buying by quote amount (quoteOrderQty),
+                # others (Bitfinex, Kraken, etc.) require an amount in base currency.
+                ex_id = getattr(exchange, 'id', '').lower() if hasattr(exchange, 'id') else ''
+
+                order = None
+                try:
+                    if CCXT_DRY_RUN:
+                        # Do not execute real orders in dry-run mode; log intended action
+                        logger.info(f"DRY RUN: would place BUY on {exchange.id} {market_symbol} for ${usd_to_buy:,.2f}")
+                        order = {'dry_run': True, 'exchange': exchange.id if hasattr(exchange, 'id') else None, 'market': market_symbol, 'cost_usd': usd_to_buy}
+                    else:
+                        if ex_id in ('binance', 'binanceus'):
+                            # Binance supports buying by quote amount with 'quoteOrderQty'
+                            params = {'quoteOrderQty': usd_to_buy}
+                            order = await exchange.create_market_buy_order(market_symbol, None, params)
+                        else:
+                            # For exchanges that expect amount in base currency, fetch price and compute amount
+                            ticker = await exchange.fetch_ticker(market_symbol)
+                            price = ticker.get('ask') or ticker.get('last') or ticker.get('bid')
+                            if not price or price == 0:
+                                raise ValueError(f"Preço indisponível para {market_symbol}, não é possível calcular quantidade para compra.")
+                            amount_to_buy = usd_to_buy / price
+                            # place market buy order by amount (many exchanges accept this)
+                            order = await exchange.create_market_buy_order(market_symbol, amount_to_buy)
+                except Exception as e_buy_inner:
+                    error_msg = f"Erro ao executar ordem de COMPRA para {symbol_to_buy}: {e_buy_inner}"
+                    logger.error(error_msg, exc_info=True)
+                    results['errors'].append(error_msg)
+                    order = None
+
+                if order is not None:
+                    results['orders'].append(order)
+
             except Exception as e_buy:
-                error_msg = f"Erro ao executar ordem de COMPRA para {symbol_to_buy}: {e}"
+                error_msg = f"Erro ao executar ordem de COMPRA para {symbol_to_buy}: {e_buy}"
                 logger.error(error_msg, exc_info=True)
                 results['errors'].append(error_msg)
 

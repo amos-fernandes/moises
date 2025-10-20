@@ -26,7 +26,6 @@ import uvicorn
 import httpx
 import pandas as pd
 import numpy as np
-import yfinance as yf
 from fastapi import FastAPI, Request, HTTPException, Depends, Header, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -36,13 +35,47 @@ from pydantic import BaseModel
 
 # Imports dos módulos locais (corrigidos e organizados)
 from src.utils.logger import get_logger
-from src.model.rnn_predictor import RNNModelPredictor
+
+# RNNModelPredictor imports TensorFlow and other heavy libs. Allow
+# skipping that import at process start (useful for lightweight tests)
+# by setting the environment variable SKIP_RNN_IMPORT=1.
+RNNModelPredictor = None
+if not os.environ.get("SKIP_RNN_IMPORT"):
+    try:
+        from src.model.rnn_predictor import RNNModelPredictor
+    except Exception as _e:
+        # Avoid failing import-time; log later after logger is available
+        print(f"Warning: RNNModelPredictor import skipped due to: {_e}")
 
 ### <<< CORREÇÃO CRÍTICA NOS IMPORTS >>> ###
 # Cada função é importada de seu respectivo módulo.
-from src.utils.ccxt_utils import get_ccxt_exchange, fetch_crypto_data
-from src.utils.market_data_utils import fetch_btc_dominance, get_market_sentiment
-from src.utils.technical_analysis_utils import calculate_rsi
+# Allow skipping heavy external imports (yfinance, ccxt, market utils) during lightweight tests
+SKIP_HEAVY_IMPORTS = bool(os.environ.get('SKIP_HEAVY_IMPORTS'))
+
+if not SKIP_HEAVY_IMPORTS:
+    import yfinance as yf
+    from src.utils.ccxt_utils import get_ccxt_exchange, fetch_crypto_data
+    from src.utils.market_data_utils import fetch_btc_dominance, get_market_sentiment
+    from src.utils.technical_analysis_utils import calculate_rsi
+else:
+    # Lightweight stubs used in test mode to avoid importing heavy libraries
+    yf = None
+
+    async def get_ccxt_exchange(logger_instance=None):
+        return None
+
+    async def fetch_crypto_data(exchange, crypto_pairs, logger_instance=None):
+        # return empty data structure matching the expected shape
+        return {}, [], []
+
+    async def fetch_btc_dominance():
+        return None
+
+    async def get_market_sentiment():
+        return {}
+
+    def calculate_rsi(series, period=14):
+        return None
 ### <<< FIM DA CORREÇÃO >>> ###
 
 from contextlib import asynccontextmanager
@@ -175,7 +208,7 @@ async def _run_rnn_analysis(rnn_tx_id: str, market_data: Dict, amount: float) ->
     """Executa a análise da RNN e gera decisões de investimento."""
     logger.info(f"BG TASK [{rnn_tx_id}]: Executando análise da RNN.")
     
-    predictor = getattr(app.state, 'rnn_predictor', None)
+    predictor = getattr(fastapi_app.state, 'rnn_predictor', None)
     if not predictor or not predictor.model:
         logger.error(f"BG TASK [{rnn_tx_id}]: Modelo RNN não carregado. Abortando análise.")
         return []
@@ -245,12 +278,30 @@ async def execute_investment_strategy_background(rnn_tx_id: str, client_id: str,
     """
     logger.info(f"BG TASK [{rnn_tx_id}]: Iniciando orquestração do ciclo de investimento.")
     transactions_db[rnn_tx_id]["status"] = "processing"
-    
+
     exchange = None
     final_status = "completed"
     error_details = ""
-    
+
     try:
+        # Fast local test mode: immediately send callback without running the full pipeline.
+        if os.environ.get('FAST_TEST_CALLBACK') == '1':
+            logger.info(f"BG TASK [{rnn_tx_id}]: FAST_TEST_CALLBACK active - sending immediate simulated callback.")
+            callback_payload = InvestmentResultPayload(
+                rnn_transaction_id=rnn_tx_id,
+                aibank_transaction_token=aibank_tx_token,
+                client_id=client_id,
+                initial_amount=amount,
+                final_amount=round(amount, 2),
+                profit_loss=0.0,
+                status='completed',
+                timestamp=datetime.utcnow(),
+                details='fast-test-simulated'
+            )
+            await _send_callback_to_aibank(callback_payload)
+            transactions_db[rnn_tx_id]["status"] = 'completed'
+            transactions_db[rnn_tx_id]["callback_status"] = 'sent'
+            return
         # Etapa 1: Conectar à Exchange
         exchange = await get_ccxt_exchange(logger_instance=logger)
         if not exchange:
@@ -271,7 +322,7 @@ async def execute_investment_strategy_background(rnn_tx_id: str, client_id: str,
 
         # Etapa 5: Simular Valorização EOD (End of Day)
         final_portfolio_value = await _simulate_eod_valuation(portfolio_cost, executed_trades)
-        
+
         # Etapa 6: Calcular Resultado Final
         final_amount = cash_remaining + final_portfolio_value
 
@@ -280,7 +331,7 @@ async def execute_investment_strategy_background(rnn_tx_id: str, client_id: str,
         final_status = "failed"
         error_details = str(e)
         final_amount = amount # Em caso de falha, retorna o valor inicial
-    
+
     finally:
         # Etapa 7: Limpeza (sempre executa)
         if exchange:
@@ -304,29 +355,7 @@ async def execute_investment_strategy_background(rnn_tx_id: str, client_id: str,
     transactions_db[rnn_tx_id]["callback_status"] = "sent"
 
 # --- 6. EVENTOS DE STARTUP E DEPENDÊNCIAS ---
-@fastapi_app.on_event("startup")
-async def startup_event():
-    """Carrega o modelo RNN ao iniciar o servidor."""
-    try:
-        # Caminhos para os arquivos do modelo
-        MODEL_DIR = "src/model/"
-        MODEL_FILENAME = "model.h5"
-        PV_SCALER_FILENAME = "price_volume_atr_norm_scaler.joblib"
-        IND_SCALER_FILENAME = "other_indicators_scaler.joblib"
-
-        predictor = RNNModelPredictor(
-            model_dir=MODEL_DIR,
-            model_filename=MODEL_FILENAME,
-            pv_scaler_filename=PV_SCALER_FILENAME,
-            ind_scaler_filename=IND_SCALER_FILENAME,
-            logger_instance=logger
-        )
-        await predictor.load_model()
-        fastapi_app.state.rnn_predictor = predictor
-        logger.info("✅ Modelo RNN e scalers carregados com sucesso.")
-    except Exception as e:
-        logger.error(f"❌ FALHA CRÍTICA ao carregar modelo RNN na inicialização: {e}", exc_info=True)
-        fastapi_app.state.rnn_predictor = None
+# Removed duplicate startup_event: model is loaded in the lifespan manager above
 
 async def verify_aibank_key(authorization: str = Header(None)):
     """Dependência para verificar a chave de API do AIBank."""

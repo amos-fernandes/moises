@@ -7,6 +7,12 @@ import datetime as dt
 import sys
 import types
 
+# Ensure repository root is on sys.path so relative imports like `agents.*` work
+from pathlib import Path as _Path
+_repo_root = str(_Path(__file__).resolve().parents[1])
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
 # Lightweight agents.config fallback for import-time safety
 if 'agents.config' not in sys.modules:
     fake_cfg = types.ModuleType('agents.config')
@@ -147,7 +153,33 @@ def apply_saved_scalers_or_fail(feats: pd.DataFrame):
     if pv_n != manifest.get('pv_n_features') or ind_n != manifest.get('ind_n_features'):
         raise RuntimeError(f"Scaler/manifest mismatch: pv {pv_n}!={manifest.get('pv_n_features')}, ind {ind_n}!={manifest.get('ind_n_features')}")
 
-    scaled_df = apply_scalers_with_exact_multi_asset_placeholders(feats, lp, li)
+    # Exact ordered_cols validation: ensure the manifest has ordered_cols and that the
+    # base features for a single asset (manifest['base_features']) match the prefix-stripped
+    # ordering expected by our feature generator. This prevents silent mismatches when
+    # scalers were built with a different feature order.
+    ordered_cols = manifest.get('ordered_cols')
+    base_feats = manifest.get('base_features') or getattr(cfg, 'BASE_FEATURES_PER_ASSET_INPUT', None)
+    if ordered_cols is None or base_feats is None:
+        raise RuntimeError('Manifest missing ordered_cols or base_features; cannot validate exact column ordering')
+
+    # Derive the manifest's base ordering by stripping the leading asset_ prefix from the first asset block
+    # Find the first asset name listed in the manifest
+    assets = manifest.get('assets', [])
+    if not assets:
+        raise RuntimeError('Manifest assets list empty; cannot validate ordering')
+    first_asset = assets[0]
+    # ordered_cols should be like ['asset_col1', 'asset_col2', ...]; extract the block for first_asset
+    first_block = [c for c in ordered_cols if c.startswith(f"{first_asset}_")]
+    if len(first_block) < 1:
+        raise RuntimeError('Manifest ordered_cols does not contain columns for first asset; cannot validate')
+    manifest_base = [c[len(first_asset) + 1:] for c in first_block]
+
+    # Compare manifest_base to our base_feats; if they differ exactly, abort to enforce reproducibility
+    if list(manifest_base) != list(base_feats):
+        raise RuntimeError(f"Manifest base feature ordering mismatch. Manifest base: {manifest_base[:10]}... vs expected base: {base_feats[:10]}...")
+
+    # pass the discovered base_features into the scaler application so the placeholder builder uses the exact order
+    scaled_df = apply_scalers_with_exact_multi_asset_placeholders(feats, lp, li, expected_base=manifest_base)
     return scaled_df
 
 
@@ -173,7 +205,7 @@ def refit_and_save_scalers_univariate(feats_df: pd.DataFrame):
 
     def backup_file(p: Path):
         if p.exists():
-            bak = p.with_suffix(p.suffix + f'.bak_{dt.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")}')
+            bak = p.with_suffix(p.suffix + f'.bak_{dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")}')
             p.rename(bak)
             print(f"Backed up {p} -> {bak}")
 
@@ -298,13 +330,13 @@ if __name__ == '__main__':
 
         # Default backtest (unscaled features)
         out_default = run_backtest_from_features(feats, start_capital=100000.0)
-        prefix = LOGS_DIR / f"backtest_ethusd_2y_1h_{dt.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}"
+        prefix = LOGS_DIR / f"backtest_ethusd_2y_1h_{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
         out_default['trades'].to_csv(str(prefix) + '_trades.csv', index=False)
         out_default['equity'].to_csv(str(prefix) + '_equity.csv', header=['equity'])
 
         # Tuned run (scaled inputs)
         tuned = run_backtest_from_features(scaled_df, start_capital=100000.0)
-        tuned_prefix = LOGS_DIR / f"backtest_ethusd_2y_1h_tuned_{dt.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}"
+        tuned_prefix = LOGS_DIR / f"backtest_ethusd_2y_1h_tuned_{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
         tuned['trades'].to_csv(str(tuned_prefix) + '_trades.csv', index=False)
         tuned['equity'].to_csv(str(tuned_prefix) + '_equity.csv', header=['equity'])
         print(f"Tuned run saved to logs\\{tuned_prefix.stem}_* . End capital: {tuned['equity'].iloc[-1]:.2f}")

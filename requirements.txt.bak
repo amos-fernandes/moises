@@ -1,0 +1,47 @@
+scikit-learn==1.7.2
+scipy==1.16.2
+tensorflow
+scikit-learn
+tensorflow
+# Pin streamlit to a modern release so pip doesn't backtrack to very old streamlit versions
+# that require tornado 5.x (which triggers build/SSL errors).
+streamlit==1.50.0
+matplotlib
+fastapi
+uvicorn
+httpx
+pydantic
+python-dotenv
+loguru
+# agno @ git+https://github.com/agno-agi/agno.git
+jinja2
+yfinance
+PyJWT
+transformers
+gymnasium
+tf-keras
+ccxt
+
+# Pin yfinance to a stable wheeled release to avoid broken metadata in some yfinance wheels
+yfinance==0.2.66
+
+
+# Versões compatíveis com pandas_ta e squeeze_pro
+
+ccxt
+# pandas-ta removed from automated install because recent pandas-ta releases require newer numpy
+# (>=2.2). Many project modules treat pandas_ta as optional. If you need it, install manually
+# into the working venv with a compatible version or use conda: e.g.
+#   .\.venv\Scripts\python -m pip install pandas-ta==0.4.67
+
+# Relaxed pins to improve wheel availability across Python versions (e.g. Python 3.11/3.12/3.13)
+# Prefer numpy < 2 to maintain ABI compatibility with certain compiled extensions.
+numpy<2
+pandas==2.1.4
+aiohttp
+
+# Ensure tornado is recent enough
+tornado>=6.2.0
+
+# Pin matplotlib to a recent release with prebuilt wheels for Windows/Python 3.11
+matplotlib==3.7.1
