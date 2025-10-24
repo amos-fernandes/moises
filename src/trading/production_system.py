@@ -4,7 +4,10 @@ Funcional e pronto para produção
 """
 import pandas as pd
 import numpy as np
-import pandas_ta as ta
+try:
+    import ta
+except ImportError:
+    import pandas as pd  # fallback sem TA
 import asyncio
 import json
 from pathlib import Path
