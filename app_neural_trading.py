@@ -673,6 +673,114 @@ async def binance_connection_status():
             "error": str(e)
         }
 
+# =====================================================
+# ENDPOINTS SISTEMA HUMANITÁRIO - IMPACTO SOCIAL  
+# =====================================================
+
+@app.get("/api/social/impact-report")
+async def get_impact_report():
+    """Relatório de impacto social do sistema"""
+    try:
+        from src.social.humanitarian_system import humanitarian_system
+        
+        impact_report = humanitarian_system.get_impact_report()
+        success_stories = humanitarian_system.generate_success_stories()
+        system_status = humanitarian_system.get_system_status()
+        
+        return {
+            "impact_report": impact_report,
+            "success_stories": success_stories[:5],  # Top 5 histórias
+            "system_status": system_status,
+            "mission": "Transformar lucros do trading neural em esperança para famílias necessitadas"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro no relatório social: {str(e)}")
+
+@app.post("/api/social/register-family")
+async def register_beneficiary_family(family_data: dict):
+    """Registra nova família beneficiária"""
+    try:
+        from src.social.humanitarian_system import humanitarian_system
+        
+        success = humanitarian_system.register_beneficiary(family_data)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": f"Família {family_data.get('name', 'N/A')} registrada com sucesso",
+                "family_id": len(humanitarian_system.beneficiaries),
+                "monthly_support": humanitarian_system.monthly_per_family
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Dados incompletos para registro")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro no registro: {str(e)}")
+
+@app.post("/api/social/process-donations")
+async def process_monthly_donations():
+    """Processa doações mensais automáticas"""
+    try:
+        from src.social.humanitarian_system import humanitarian_system
+        
+        result = humanitarian_system.process_monthly_donations()
+        
+        return {
+            "donation_result": result,
+            "humanitarian_impact": f"{result.get('donations_processed', 0)} famílias atendidas",
+            "next_processing": "Próximo mês automaticamente"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro no processamento: {str(e)}")
+
+@app.post("/api/social/emergency-help")
+async def emergency_assistance(emergency_data: dict):
+    """Assistência de emergência para beneficiário"""
+    try:
+        from src.social.humanitarian_system import humanitarian_system
+        
+        beneficiary_id = emergency_data.get("beneficiary_id")
+        amount = emergency_data.get("amount")
+        reason = emergency_data.get("reason", "Emergência")
+        
+        if not beneficiary_id or not amount:
+            raise HTTPException(status_code=400, detail="ID do beneficiário e valor são obrigatórios")
+        
+        success = humanitarian_system.emergency_assistance(beneficiary_id, amount, reason)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": f"Emergência processada: R$ {amount:.2f}",
+                "reason": reason,
+                "processed_at": datetime.now().isoformat()
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Não foi possível processar emergência")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro na emergência: {str(e)}")
+
+@app.get("/api/social/fund-status")
+async def social_fund_status():
+    """Status atual do fundo social"""
+    try:
+        from src.social.humanitarian_system import humanitarian_system
+        
+        status = humanitarian_system.get_system_status()
+        
+        return {
+            "fund_status": status,
+            "capacity": f"Pode ajudar {status['monthly_capacity']} famílias por mês",
+            "total_impact": status["total_impact"],
+            "health": status["fund_health"]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro no status: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     
