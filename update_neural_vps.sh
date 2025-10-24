@@ -7,7 +7,7 @@ echo "🧠 Atualizando Sistema Neural Trading..."
 echo "======================================"
 
 # Navegar para diretório
-cd ~/neural-trading || { echo "❌ Diretório neural-trading não encontrado!"; exit 1; }
+cd ~/moises || { echo "❌ Diretório moises não encontrado!"; exit 1; }
 
 # Parar sistema atual
 echo "🛑 Parando sistema atual..."

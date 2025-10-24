@@ -14,19 +14,19 @@ if (!(Test-Path "app_neural_trading.py")) {
 
 # 1. Copiar arquivos principais
 Write-Host "📤 Copiando arquivos principais..." -ForegroundColor Yellow
-scp "app_neural_trading.py" "${VPS_USER}@${VPS_IP}:~/neural-trading/"
-scp "neural_monitor_dashboard.py" "${VPS_USER}@${VPS_IP}:~/neural-trading/"
+scp "app_neural_trading.py" "${VPS_USER}@${VPS_IP}:~/moises/"
+scp "neural_monitor_dashboard.py" "${VPS_USER}@${VPS_IP}:~/moises/"
 
 # 2. Copiar estrutura src/
 Write-Host "📁 Copiando estrutura src/..." -ForegroundColor Yellow
-scp -r "src" "${VPS_USER}@${VPS_IP}:~/neural-trading/"
+scp -r "src" "${VPS_USER}@${VPS_IP}:~/moises/"
 
 # 3. Copiar configurações
 Write-Host "⚙️ Copiando configurações..." -ForegroundColor Yellow
-scp -r "new-rede-a" "${VPS_USER}@${VPS_IP}:~/neural-trading/"
-scp "requirements.txt" "${VPS_USER}@${VPS_IP}:~/neural-trading/" 2>$null
-scp "docker-compose.yml" "${VPS_USER}@${VPS_IP}:~/neural-trading/" 2>$null
-scp "Dockerfile*" "${VPS_USER}@${VPS_IP}:~/neural-trading/" 2>$null
+scp -r "new-rede-a" "${VPS_USER}@${VPS_IP}:~/moises/"
+scp "requirements.txt" "${VPS_USER}@${VPS_IP}:~/moises/" 2>$null
+scp "docker-compose.yml" "${VPS_USER}@${VPS_IP}:~/moises/" 2>$null
+scp "Dockerfile*" "${VPS_USER}@${VPS_IP}:~/moises/" 2>$null
 
 # 4. Copiar script de atualização
 Write-Host "🔧 Copiando script de atualização..." -ForegroundColor Yellow

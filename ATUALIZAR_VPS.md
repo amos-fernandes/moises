@@ -5,7 +5,7 @@
 # ========================================
 
 # No VPS, execute:
-cd ~/neural-trading
+cd ~/moises
 git pull origin main
 ./update_neural_vps.sh
 
@@ -18,10 +18,10 @@ $IP = "SEU_IP_VPS"
 $USER = "SEU_USUARIO"
 
 # Copiar arquivos atualizados
-scp app_neural_trading.py ${USER}@${IP}:~/neural-trading/
-scp neural_monitor_dashboard.py ${USER}@${IP}:~/neural-trading/
-scp -r src ${USER}@${IP}:~/neural-trading/
-scp -r new-rede-a ${USER}@${IP}:~/neural-trading/
+scp app_neural_trading.py ${USER}@${IP}:~/moises/
+scp neural_monitor_dashboard.py ${USER}@${IP}:~/moises/
+scp -r src ${USER}@${IP}:~/moises/
+scp -r new-rede-a ${USER}@${IP}:~/moises/
 scp update_neural_vps.sh ${USER}@${IP}:~/
 
 # Executar atualização no VPS
