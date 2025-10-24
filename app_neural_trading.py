@@ -92,15 +92,11 @@ class NeuralEnhancedTradingSystem:
         self.data_manager = USMarketDataManager()
         
         # Sistema de aprendizado neural
-        self.learning_system = ContinuousLearningSystem(target_accuracy=0.60)
-        self.neural_agent = self.learning_system.neural_agent
+        self.learning_system = ContinuousLearningSystem()
+        self.neural_agent = None  # Versão mínima
         
-        # Tenta carregar modelo existente
-        if os.path.exists("neural_trading_agent.h5"):
-            self.neural_agent.load_model()
-            logger.info("🧠 Modelo neural carregado")
-        else:
-            logger.info("🆕 Novo modelo neural inicializado")
+        # Tenta carregar modelo existente (versão mínima)
+        logger.info("🆕 Modelo neural em modo mínimo")
         
         # Status do sistema
         self.system_ready = False
@@ -161,14 +157,9 @@ class NeuralEnhancedTradingSystem:
             neural_confidence = 0.5
             
             if use_neural:
-                state = self.neural_agent.preprocess_market_data(df)
-                neural_action, neural_confidence = self.neural_agent.act(
-                    state, use_expert=False
-                )
-                
-                # Converte ação para sinal
-                action_map = {0: "HOLD", 1: "BUY", 2: "SELL"}
-                neural_signal = action_map[neural_action]
+                # Neural em modo mínimo - usa estratégia Equilibrada Pro
+                neural_signal = equilibrada_signal
+                neural_confidence = equilibrada_confidence
             
             # Decisão final adaptativa
             final_signal, reasoning = self._adaptive_decision(
@@ -201,9 +192,9 @@ class NeuralEnhancedTradingSystem:
         """
         reasoning = []
         
-        # Obtém métricas de performance
-        neural_performance = self.neural_agent.evaluate_performance()
-        current_accuracy = self.learning_system.current_accuracy
+        # Obtém métricas de performance (modo mínimo)
+        neural_performance = {'accuracy': 0.5, 'avg_reward': 0.0}
+        current_accuracy = 0.5
         
         # Critérios de decisão
         high_confidence_threshold = 0.75
