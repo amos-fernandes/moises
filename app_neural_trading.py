@@ -105,14 +105,15 @@ class NeuralEnhancedTradingSystem:
     
     def start_learning(self):
         """Inicia aprendizado contínuo"""
-        if not self.learning_thread or not self.learning_thread.is_alive():
-            self.learning_thread = self.learning_system.start_continuous_learning()
+        if not hasattr(self, 'learning_thread') or not self.learning_thread:
+            self.learning_system.start_continuous_training()
             logger.info("🎓 Aprendizado contínuo iniciado")
+            self.learning_thread = True  # Versão mínima
     
     def stop_learning(self):
         """Para aprendizado contínuo"""
-        if self.learning_system:
-            self.learning_system.stop_learning()
+        if hasattr(self, 'learning_thread'):
+            self.learning_thread = False
         logger.info("🛑 Aprendizado contínuo parado")
     
     async def analyze_with_neural_enhancement(self, symbol: str, use_neural: bool = True) -> Dict:
