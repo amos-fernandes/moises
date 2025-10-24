@@ -17,26 +17,42 @@ RISK_FREE_RATE_ANNUAL = 0.2
 REWARD_WINDOW = 252
 REWARD_CALC_WINDOW = 60
 
-# Default asset list (padrão local)
+# Enhanced multi-asset configuration (otimizado para 60% assertividade)
 ASSET_CONFIGS = {
     "STOCKS": {
-        "AAPL": {"interval": "60min"},
-        "MSFT": {"interval": "60min"},
-        "GOOGL": {"interval": "60min"},
-        "AMZN": {"interval": "60min"},
-        "NVDA": {"interval": "60min"},
-        "TSLA": {"interval": "60min"},
-        "PETR4.SA": {"interval": "60min"},
-        "VALE3.SA": {"interval": "60min"},
+        # Foco em ações americanas de alta qualidade para máxima assertividade
+        "AAPL": {"interval": "60min", "weight": 0.25, "priority": 1, "market": "US", "sector": "Technology"},
+        "MSFT": {"interval": "60min", "weight": 0.20, "priority": 1, "market": "US", "sector": "Technology"},
+        "GOOGL": {"interval": "60min", "weight": 0.18, "priority": 1, "market": "US", "sector": "Technology"},
+        "AMZN": {"interval": "60min", "weight": 0.15, "priority": 1, "market": "US", "sector": "E-commerce"},
+        "NVDA": {"interval": "60min", "weight": 0.12, "priority": 1, "market": "US", "sector": "Technology"},
+        "TSLA": {"interval": "60min", "weight": 0.10, "priority": 2, "market": "US", "sector": "Automotive"},
+        # Ações brasileiras mantidas para diversificação (peso reduzido)
+        "PETR4.SA": {"interval": "60min", "weight": 0.0, "priority": 3, "market": "BR", "sector": "Energy"},
+        "VALE3.SA": {"interval": "60min", "weight": 0.0, "priority": 3, "market": "BR", "sector": "Mining"},
     },
     "FOREX": {
-        "EURUSD": {"interval": "60min"},
-        "GBPUSD": {"interval": "60min"},
+        # Forex com prioridade baixa - foco no mercado americano
+        "EURUSD": {"interval": "60min", "weight": 0.0, "priority": 3, "type": "major"},
+        "GBPUSD": {"interval": "60min", "weight": 0.0, "priority": 3, "type": "major"},
     },
     "CRYPTO": {
-        "BTC/USD": {"interval": "60min"},
-        "ETH/USD": {"interval": "60min"},
+        # Crypto mantido para oportunidades específicas (peso zero inicial)
+        "BTC/USD": {"interval": "60min", "weight": 0.0, "priority": 3, "market": "crypto"},
+        "ETH/USD": {"interval": "60min", "weight": 0.0, "priority": 3, "market": "crypto"},
     }
+}
+
+# Configuração para 60% de assertividade focada na bolsa americana
+US_MARKET_FOCUS_CONFIG = {
+    "target_accuracy": 0.60,
+    "confidence_threshold": 0.65,  # Só opera com 65%+ confiança
+    "max_positions": 3,  # Máximo 3 posições simultâneas para controle de risco
+    "position_size": 0.15,  # 15% do capital por posição
+    "stop_loss": 0.02,  # 2% stop loss
+    "take_profit": 0.06,  # 6% take profit (R:R 1:3)
+    "market_hours_only": True,  # Opera apenas no horário do mercado americano
+    "min_volume_filter": 1000000,  # Filtro de liquidez mínima
 }
 
 # Default API keys placeholders (substitua por valores reais no scripts/config.py)
