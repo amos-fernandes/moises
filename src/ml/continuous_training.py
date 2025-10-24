@@ -23,7 +23,15 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from src.ml.neural_learning_agent import NeuralTradingAgent, TradingExperience
 from src.data.alpha_vantage_loader import USMarketDataManager
 from src.config.multi_asset_config import OPTIMIZED_ASSET_CONFIGS
-from new_rede_a.config import US_MARKET_FOCUS_CONFIG
+try:
+    from rede-atencao.config import US_MARKET_FOCUS_CONFIG
+except ImportError:
+    # Fallback config se não existir
+    US_MARKET_FOCUS_CONFIG = {
+        'symbols': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA'],
+        'target_assertividade': 0.6,
+        'learning_rate': 0.001
+    }
 
 logger = logging.getLogger(__name__)
 
