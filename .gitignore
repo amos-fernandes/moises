@@ -1,14 +1,65 @@
-.nina
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+nina/
+.nina/
+env/
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
 nina-debug.log
-nina
-venv
-.venv
-# Model artifacts and scaler files
+
+# Models and data
 app/model/
 src/model/
 *.joblib
 *.pt
 *.pth
+*.pkl
+*.h5
+*.hdf5
 *.onnx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+
+# Temporary files
+tmp_*
+temp_*
+*.tmp
+*.temp
+
+# Output directories
+out/
+outputs/
 dist/
-__pycache__/
+
+# Cache
+.cache/
+*.cache
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing
+.tox/
+.coverage
+.pytest_cache/
+htmlcov/
