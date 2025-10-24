@@ -1,27 +1,120 @@
+# Docker Compose para ATCoin Real Trading System
+# Configurado para VPS Hostinger com KVM2
 version: '3.8'
+
 services:
-  api:
+  # === SERVIÇO PRINCIPAL - ATCOIN TRADING ===
+  atcoin-trading:
     build: .
-    image: moises_api:latest
-    container_name: moises_api
-    ports:
-      - "7860:7860"
-    volumes:
-      - ./logs:/app/logs
-    environment:
-      - PYTHONUNBUFFERED=1
+    image: atcoin/real-trading:latest
+    container_name: atcoin-real-trading
     restart: unless-stopped
-version: '3.8'
-services:
-  atcoin-api:
-    build: .
-    image: moises/atcoin-api:latest
-    container_name: atcoin_api
+    
+    # Portas
     ports:
-      - "7860:7860"
-    volumes:
-      - ./logs:/app/logs
-      - ./src:/app/src
+      - "8000:8000"    # API Principal
+      - "8080:8000"    # Porta alternativa
+    
+    # Variáveis de ambiente (produção)
     environment:
-      - PYTHONUNBUFFERED=1
+      # === TRADING CONFIGURATION ===
+      - TRADING_MODE=REAL
+      - BINANCE_TESTNET=false
+      - INITIAL_BALANCE_BRL=1000.00
+      - MAX_POSITION_SIZE=0.15
+      - STOP_LOSS_PERCENT=0.02
+      - TAKE_PROFIT_PERCENT=0.06
+      
+      # === SERVIDOR ===
+      - HOST=0.0.0.0
+      - PORT=8000
+      - WORKERS=1
+      - LOG_LEVEL=INFO
+      
+      # === SEGURANÇA ===
+      - SECRET_KEY=atcoin_equilibrada_pro_secret_key_production_2024
+      - CORS_ORIGINS=*
+      
+      # === BINANCE (será carregado do .env) ===
+      - BINANCE_API_KEY=${BINANCE_API_KEY}
+      - BINANCE_SECRET_KEY=${BINANCE_SECRET_KEY}
+      
+      # === AIBANK ===
+      - AIBANK_API_KEY=atcoin_production_key_2024
+      - AIBANK_CALLBACK_URL=https://aibank-api.com/api/rnn_investment_result_callback
+      - CALLBACK_SHARED_SECRET=super_secret_production_key_equilibrada_pro_2024
+    
+    # Variáveis do arquivo .env
+    env_file:
+      - .env
+    
+    # Volumes para persistência
+    volumes:
+      - ./logs:/app/logs:rw
+      - ./data:/app/data:rw
+      - atcoin-data:/app/persistent_data
+    
+    # Rede personalizada
+    networks:
+      - atcoin-network
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Dependências
+    depends_on:
+      - redis
+    
+    # Recursos (ajuste conforme VPS)
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+  
+  # === REDIS PARA CACHE ===
+  redis:
+    image: redis:7-alpine
+    container_name: atcoin-redis
     restart: unless-stopped
+    
+    ports:
+      - "6379:6379"
+    
+    volumes:
+      - redis-data:/data
+    
+    networks:
+      - atcoin-network
+    
+    # Configuração Redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+# === VOLUMES ===
+volumes:
+  atcoin-data:
+    driver: local
+  redis-data:
+    driver: local
+
+# === REDE ===
+networks:
+  atcoin-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

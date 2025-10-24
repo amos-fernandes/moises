@@ -38,7 +38,13 @@ class OptimizedProfitStrategy:
         
         # RSI e Estocástico
         df['rsi'] = ta.rsi(df['close'], length=14)
-        df['stoch_k'], df['stoch_d'] = ta.stoch(df['high'], df['low'], df['close'])
+        stoch_data = ta.stoch(df['high'], df['low'], df['close'])
+        if stoch_data is not None and not stoch_data.empty:
+            df['stoch_k'] = stoch_data.iloc[:, 0]
+            df['stoch_d'] = stoch_data.iloc[:, 1]
+        else:
+            df['stoch_k'] = 50  # Valores neutros se falhar
+            df['stoch_d'] = 50
         
         # MACD
         macd_data = ta.macd(df['close'])

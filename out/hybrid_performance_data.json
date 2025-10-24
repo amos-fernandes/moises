@@ -1,0 +1,23 @@
+{
+  "timestamp": "2025-10-24T07:38:49.036247",
+  "config": {
+    "stop_loss_pct": 0.02,
+    "take_profit_pct": 0.06,
+    "position_size": 0.15,
+    "rsi_oversold": 30,
+    "rsi_overbought": 70,
+    "volume_threshold": 1.8,
+    "confidence_threshold": 0.75,
+    "nn_weight": 0.3
+  },
+  "metrics": {
+    "total_signals": 0,
+    "successful_trades": 0,
+    "nn_correct_predictions": 0,
+    "strategy_accuracy": 0.0,
+    "nn_accuracy": 0.0,
+    "hybrid_accuracy": 0.0
+  },
+  "total_trades": 0,
+  "signals_generated": 24565,
+  "final_equity": 

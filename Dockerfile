@@ -1,23 +1,53 @@
-FROM python:3.10-slim
+# Dockerfile para ATCoin Real Trading System
+FROM python:3.11-slim
 
-# Diretório de trabalho
-WORKDIR /app
+# Informações do container
+LABEL maintainer="ATCoin Trading Team"
+LABEL description="ATCoin Real Trading System with Equilibrada_Pro Strategy"
+LABEL version="3.0.0"
 
-# Copia os arquivos do projeto
-COPY . /app
+# Variáveis de ambiente
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONPATH=/app
 
-# Atualiza pip e instala dependências
+# Timezone
+ENV TZ=America/Sao_Paulo
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Instala dependências do sistema
 RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
     git \
-    ffmpeg \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Cria usuário não-root
+RUN useradd --create-home --shell /bin/bash atcoin
+WORKDIR /app
 
-# Expõe porta padrão Gradio ou Uvicorn
-EXPOSE 7860
-# Comando de inicialização
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Copia requirements primeiro (cache Docker)
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copia código da aplicação
+COPY --chown=atcoin:atcoin . .
+
+# Cria diretórios necessários
+RUN mkdir -p /app/logs /app/data /app/static /app/templates
+RUN chown -R atcoin:atcoin /app
+
+# Muda para usuário não-root
+USER atcoin
+
+# Porta de exposição (ATCoin Real Trading)
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Comando padrão - ATCoin Real Trading
+CMD ["python", "app_real_trading.py"]
