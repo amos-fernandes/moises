@@ -2,7 +2,7 @@
   "start_time": 1760918591.6692379,
   "runs": {
     "crypto_btc": {
-      "checked_at": 1760990741.2338097,
+      "checked_at": 1761004968.6309981,
       "artifacts": [],
       "final_equity": {
         "path": "logs\\backtest_ethusd_2y_1h_tuned_20251018T154548Z_equity.csv",
@@ -10,7 +10,7 @@
       }
     },
     "crypto_eth": {
-      "checked_at": 1760990741.2338097,
+      "checked_at": 1761004968.6319973,
       "artifacts": [],
       "final_equity": {
         "path": "logs\\backtest_ethusd_2y_1h_tuned_20251018T154548Z_equity.csv",
@@ -18,7 +18,7 @@
       }
     },
     "stock_aapl": {
-      "checked_at": 1760990741.2338097,
+      "checked_at": 1761004968.6353846,
       "artifacts": [],
       "final_equity": {
         "path": "logs\\backtest_ethusd_2y_1h_tuned_20251018T154548Z_equity.csv",

@@ -398,10 +398,20 @@ class RNNModelPredictor:
         self.model_path = os.path.join(model_dir, model_filename)
         self.pv_scaler_path = os.path.join(model_dir, pv_scaler_filename)
         self.ind_scaler_path = os.path.join(model_dir, ind_scaler_filename)
-        
+
         self.model: Optional[tf.keras.Model] = None
         self.price_volume_scaler = None
         self.indicator_scaler = None
+
+        # TorchScript fallback (traced policy) path and holder
+        self.torchscript_policy = None
+        # Path defaults to <repo root>/out/sb3_export/ppo_policy_traced.pt
+        try:
+            repo_root = Path(__file__).resolve().parents[2]
+            self.torchscript_path = str((repo_root / 'out' / 'sb3_export' / 'ppo_policy_traced.pt').resolve())
+        except Exception:
+            self.torchscript_path = os.path.abspath(os.path.join(model_dir, '..', 'out', 'sb3_export', 'ppo_policy_traced.pt'))
+
         # Ensure there is always a logger to avoid AttributeError in headless/test environments
         import logging
         if logger_instance is None:
@@ -411,8 +421,13 @@ class RNNModelPredictor:
                 self.logger.addHandler(logging.NullHandler())
         else:
             self.logger = logger_instance
+
         # number of features expected by the model (from config)
-        self.num_model_features_expected = len(EXPECTED_SCALED_FEATURES_FOR_MODEL)
+        try:
+            self.num_model_features_expected = len(EXPECTED_SCALED_FEATURES_FOR_MODEL)
+        except Exception:
+            self.num_model_features_expected = None
+
         # do NOT block in __init__; provide an async loader to be used during startup
 
     def _load_scaler(self, scaler_path: str, scaler_name: str):
@@ -526,6 +541,64 @@ class RNNModelPredictor:
 
             if self.price_volume_scaler is None or self.indicator_scaler is None:
                 self.logger.error("Um ou ambos os scalers não puderam ser carregados. O preditor pode não funcionar.")
+            # Attempt to load TorchScript fallback if main model is unavailable
+            try:
+                import torch
+                ts_path = os.path.abspath(self.torchscript_path)
+                if os.path.exists(ts_path):
+                    try:
+                        self.torchscript_policy = torch.jit.load(ts_path, map_location='cpu')
+                        self.logger.info(f"TorchScript fallback carregado de {ts_path}")
+                    except Exception as e_ts:
+                        self.logger.warning(f"Falha ao carregar TorchScript fallback {ts_path}: {e_ts}")
+                        self.torchscript_policy = None
+                else:
+                    self.logger.debug(f"TorchScript fallback não encontrado em {ts_path}")
+            except Exception as e_ts_all:
+                self.logger.debug(f"TorchScript environment não disponível: {e_ts_all}")
+            # If TorchScript loaded, attempt to load SB3 model as helper for postprocessing (predict semantics)
+            try:
+                if self.torchscript_policy is not None:
+                    # register vendored modules (if any) so cloudpickle can deserialize SB3 zip
+                    try:
+                        import importlib.util, sys
+                        repo_root = Path(__file__).resolve().parents[2]
+                        vendored_dir = repo_root / 'new-rede-a'
+                        if vendored_dir.exists():
+                            dpt = vendored_dir / 'deep_portfolio_torch.py'
+                            pfe = vendored_dir / 'portfolio_features_extractor_torch.py'
+                            if dpt.exists():
+                                spec = importlib.util.spec_from_file_location('deep_portfolio_torch', str(dpt))
+                                mod = importlib.util.module_from_spec(spec)
+                                sys.modules['deep_portfolio_torch'] = mod
+                                spec.loader.exec_module(mod)
+                                sys.modules['new_rede_a.deep_portfolio_torch'] = mod
+                            if pfe.exists():
+                                spec2 = importlib.util.spec_from_file_location('portfolio_features_extractor_torch', str(pfe))
+                                mod2 = importlib.util.module_from_spec(spec2)
+                                sys.modules['portfolio_features_extractor_torch'] = mod2
+                                spec2.loader.exec_module(mod2)
+                                sys.modules['new_rede_a.portfolio_features_extractor_torch'] = mod2
+                                sys.modules['new_rede_a_portfolio_features_extractor_torch'] = mod2
+                    except Exception:
+                        self.logger.debug('Não foi possível registrar modules vendored; SB3 load pode falhar.')
+
+                    try:
+                        from stable_baselines3 import PPO
+                        # Attempt to load SB3 model (this is used only for matching predict output semantics)
+                        try:
+                            self._sb3_helper = PPO.load(self.model_path, device='cpu')
+                            self.logger.info('SB3 helper model carregado para postprocessing de predicao.')
+                        except Exception as e_sb3_load:
+                            self._sb3_helper = None
+                            self.logger.warning(f'Falha ao carregar SB3 helper model: {e_sb3_load}')
+                    except Exception as e_sb3_imp:
+                        self._sb3_helper = None
+                        self.logger.debug(f'Stable-baselines3 não disponível para helper: {e_sb3_imp}')
+                else:
+                    self._sb3_helper = None
+            except Exception:
+                self._sb3_helper = None
         except Exception as e:
             self.logger.error(f"RNNPredictor: Falha crítica ao carregar modelo ou scalers: {e}", exc_info=True)
             self.model = None # Invalida tudo se houver erro
@@ -564,6 +637,16 @@ class RNNModelPredictor:
                 info['model_input_shape'] = None
         else:
             info['model_input_shape'] = None
+        # TorchScript fallback info
+        try:
+            info['torchscript_loaded'] = self.torchscript_policy is not None
+        except Exception:
+            info['torchscript_loaded'] = False
+        # SB3 helper presence
+        try:
+            info['sb3_helper_loaded'] = getattr(self, '_sb3_helper', None) is not None
+        except Exception:
+            info['sb3_helper_loaded'] = False
         return info
 
     async def predict_for_asset_ohlcv(
@@ -574,8 +657,9 @@ class RNNModelPredictor:
         
         current_loop = asyncio.get_event_loop()
 
-        if self.model is None or self.price_volume_scaler is None or self.indicator_scaler is None:
-            self.logger.warning("API Predict: Modelo ou scalers não carregados. Predição pulada.")
+        # Require scalers to be present. Model can be Keras or TorchScript fallback.
+        if self.price_volume_scaler is None or self.indicator_scaler is None:
+            self.logger.warning("API Predict: Um ou ambos os scalers não carregados. Predição pulada.")
             return None, None
 
         # 1. Calcular todas as features base (use the function defined in this module)
@@ -604,8 +688,16 @@ class RNNModelPredictor:
            
         # 3. Fazer a predição
         try:
-            # model.predict is CPU/GPU heavy; run in executor
-            raw_predictions = await current_loop.run_in_executor(None, self.model.predict, processed_input)
+            # Prefer Keras model if available
+            if self.model is not None:
+                # model.predict is CPU/GPU heavy; run in executor
+                raw_predictions = await current_loop.run_in_executor(None, self.model.predict, processed_input)
+            elif self.torchscript_policy is not None:
+                # Use TorchScript fallback (run in executor to avoid blocking loop)
+                raw_predictions = await current_loop.run_in_executor(None, self._predict_with_torchscript, processed_input)
+            else:
+                self.logger.warning("API Predict: Nenhum modelo disponível para inferência.")
+                return None, None
             
             if raw_predictions.ndim == 2 and raw_predictions.shape[0] == 1 and raw_predictions.shape[1] == 1:
                 prediction_prob = float(raw_predictions[0, 0])
@@ -618,6 +710,84 @@ class RNNModelPredictor:
         except Exception as e:
             self.logger.error(f"RNNPredictor: Erro durante a predição com o modelo: {e}", exc_info=True)
             return None, None
+
+    def _predict_with_torchscript(self, processed_input: np.ndarray):
+        """Adapter to call the traced TorchScript policy.
+
+        processed_input: numpy array shaped (1, window_size, num_features)
+        Returns numpy array representing the action or prediction.
+        """
+        try:
+            import torch
+            # TorchScript likely expects a torch tensor; convert and ensure dtype
+            tensor = torch.as_tensor(processed_input, dtype=torch.float32)
+            # Prepare two candidate inputs: (batch, window, features) and flattened (batch, features_flat)
+            tensor_batch = tensor
+            tensor_flat = tensor.view(tensor.size(0), -1) if tensor.ndim > 2 else tensor
+
+            self.torchscript_policy.eval()
+            with torch.no_grad():
+                # Try calling with batch shape first
+                try:
+                    out = self.torchscript_policy(tensor_batch)
+                except Exception:
+                    out = None
+                # If failed, try flattened input
+                if out is None:
+                    try:
+                        out = self.torchscript_policy(tensor_flat)
+                    except Exception as e_call:
+                        self.logger.exception('TorchScript call failed for both batch and flat input: %s', e_call)
+                        return None
+
+            # Normalize output to a numpy array (choose first tensor-like element if tuple/list)
+            out_t = None
+            if isinstance(out, (tuple, list)):
+                for item in out:
+                    if isinstance(item, torch.Tensor):
+                        out_t = item
+                        break
+                if out_t is None:
+                    out_t = out[0]
+            elif isinstance(out, torch.Tensor):
+                out_t = out
+            else:
+                try:
+                    import numpy as _np
+                    return _np.array(out)
+                except Exception:
+                    self.logger.error('TorchScript returned unsupported output type: %s', type(out))
+                    return None
+
+            traced_np = out_t.cpu().numpy() if hasattr(out_t, 'cpu') else out_t
+
+            # If we have an SB3 helper model, compare shapes and prefer traced output if consistent,
+            # otherwise fall back to sb3_model.predict() to replicate exact predict semantics.
+            try:
+                if getattr(self, '_sb3_helper', None) is not None:
+                    # sb3.predict expects a single observation (no batch) in many cases
+                    obs_for_sb3 = processed_input[0]
+                    try:
+                        sb3_action, _ = self._sb3_helper.predict(obs_for_sb3, deterministic=True)
+                    except Exception:
+                        # some policies may expect batch dim
+                        sb3_action, _ = self._sb3_helper.predict(processed_input, deterministic=True)
+
+                    # If shapes match, return traced output; else choose sb3_action to match predict() semantics
+                    sb3_arr = sb3_action if isinstance(sb3_action, np.ndarray) else np.array(sb3_action)
+                    if traced_np.shape == sb3_arr.shape:
+                        return traced_np
+                    else:
+                        self.logger.debug('Traced output shape %s differs from sb3 predict shape %s; using sb3 predict result', traced_np.shape, sb3_arr.shape)
+                        return sb3_arr
+                else:
+                    return traced_np
+            except Exception as e_final:
+                self.logger.exception('Erro ao comparar/usar saída do TorchScript com SB3 helper: %s', e_final)
+                return traced_np
+        except Exception as e:
+            self.logger.exception('Erro durante inferência TorchScript: %s', e)
+            return None
 
 # --- Para teste local do rnn_predictor.py (exemplo) ---
 async def test_predictor():
