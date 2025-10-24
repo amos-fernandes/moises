@@ -22,7 +22,7 @@ import json
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 # Imports dos sistemas
-from src.trading.production_system import EquilibradaProStrategy
+from src.trading.production_system import ProductionTradingSystem
 from src.trading.us_market_system import USMarketAnalyzer, USMarketStrategy
 from src.data.alpha_vantage_loader import USMarketDataManager
 from src.ml.neural_learning_agent import NeuralTradingAgent
@@ -85,7 +85,7 @@ class NeuralEnhancedTradingSystem:
     
     def __init__(self):
         # Componentes principais
-        self.equilibrada_pro = EquilibradaProStrategy()
+        self.equilibrada_pro = ProductionTradingSystem()
         self.us_analyzer = USMarketAnalyzer()
         self.us_strategy = USMarketStrategy()
         self.data_manager = USMarketDataManager()
