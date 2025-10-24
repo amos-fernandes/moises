@@ -28,6 +28,12 @@ from src.data.alpha_vantage_loader import USMarketDataManager
 from src.ml.neural_learning_agent import NeuralTradingAgent
 from src.ml.continuous_training import ContinuousLearningSystem
 
+# Novos imports para evolução 85% ganhos
+from src.evolution.neural_evolution_orchestrator import NeuralEvolutionOrchestrator
+from src.optimization.performance_optimizer import PerformanceOptimizer
+from src.ml.advanced_neural_agent import AdvancedNeuralAgent
+from src.scaling.multi_asset_system import MultiAssetScalingSystem
+
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -94,14 +100,20 @@ class NeuralEnhancedTradingSystem:
         self.learning_system = ContinuousLearningSystem()
         self.neural_agent = None  # Versão mínima
         
+        # 🎯 SISTEMA DE EVOLUÇÃO PARA 85% GANHOS
+        self.evolution_orchestrator = NeuralEvolutionOrchestrator()
+        self.performance_optimizer = PerformanceOptimizer()
+        self.multi_asset_system = MultiAssetScalingSystem()
+        self.evolution_active = False
+        
         # Tenta carregar modelo existente (versão mínima)
-        logger.info("🆕 Modelo neural em modo mínimo")
+        logger.info("🆕 Modelo neural em modo mínimo - Evolução para 85% disponível")
         
         # Status do sistema
         self.system_ready = False
         self.learning_thread = None
         
-        logger.info("🚀 Sistema Neural Integrado inicializado")
+        logger.info("🚀 Sistema Neural Integrado inicializado com capacidade de evolução")
     
     def start_learning(self):
         """Inicia aprendizado contínuo"""
@@ -499,6 +511,107 @@ async def neural_control(action: str):
         else:
             raise HTTPException(status_code=400, detail="Ação inválida")
             
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/evolution/start")
+async def start_evolution():
+    """🎯 Inicia evolução para 85% ganhos"""
+    try:
+        if neural_trading_system.evolution_active:
+            return {"message": "Evolução já em progresso", "status": "already_running"}
+        
+        neural_trading_system.evolution_active = True
+        
+        # Executar evolução em background
+        evolution_results = await neural_trading_system.evolution_orchestrator.execute_evolution_roadmap()
+        
+        neural_trading_system.evolution_active = False
+        
+        return {
+            "message": "Evolução concluída",
+            "status": "completed",
+            "results": evolution_results,
+            "target_achieved": evolution_results.get("target_achieved", False)
+        }
+        
+    except Exception as e:
+        neural_trading_system.evolution_active = False
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/evolution/status")
+async def evolution_status():
+    """Status da evolução para 85% ganhos"""
+    try:
+        status = neural_trading_system.evolution_orchestrator.get_evolution_status()
+        
+        return {
+            "evolution_active": neural_trading_system.evolution_active,
+            "evolution_status": status,
+            "system_components": {
+                "performance_optimizer": neural_trading_system.performance_optimizer is not None,
+                "multi_asset_system": neural_trading_system.multi_asset_system is not None,
+                "evolution_orchestrator": neural_trading_system.evolution_orchestrator is not None
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/optimization/analysis") 
+async def optimization_analysis():
+    """Análise de otimização atual"""
+    try:
+        # Análise de performance atual
+        current_metrics = neural_trading_system.performance_optimizer.analyze_current_performance([])
+        
+        # Plano de otimização
+        optimization_plan = neural_trading_system.performance_optimizer.generate_optimization_plan()
+        
+        # Métricas de scaling
+        scaling_metrics = neural_trading_system.multi_asset_system.calculate_scaling_metrics()
+        
+        return {
+            "current_metrics": current_metrics,
+            "optimization_plan": optimization_plan,
+            "scaling_metrics": scaling_metrics,
+            "target_accuracy": 0.85,
+            "gap_analysis": {
+                "current_gap": 0.85 - current_metrics.get("current_accuracy", 0.50),
+                "improvement_potential": optimization_plan.get("total_expected_gain", 0.0)
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/multi-asset/portfolio")
+async def multi_asset_portfolio():
+    """Portfólio multi-asset otimizado"""
+    try:
+        # Portfolio otimizado
+        portfolio = neural_trading_system.multi_asset_system.optimize_multi_asset_portfolio(
+            available_capital=100000,
+            risk_tolerance="medium"
+        )
+        
+        # Schedule de mercados
+        market_schedule = neural_trading_system.multi_asset_system.get_market_schedule()
+        
+        # Roadmap de expansão
+        expansion_roadmap = neural_trading_system.multi_asset_system.generate_expansion_roadmap()
+        
+        return {
+            "optimized_portfolio": portfolio,
+            "market_schedule": market_schedule,
+            "expansion_roadmap": expansion_roadmap,
+            "scaling_capacity": {
+                "current_assets": len(neural_trading_system.multi_asset_system.supported_assets),
+                "max_capacity": 200,
+                "asset_classes": 6
+            }
+        }
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
