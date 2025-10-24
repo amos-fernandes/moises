@@ -19,7 +19,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 # Imports dos sistemas existentes
-from src.trading.production_system import EquilibradaProStrategy
+from src.trading.production_system import ProductionTradingSystem
 from src.trading.us_market_system import USMarketAnalyzer, USMarketStrategy, USMarketSignal
 from src.data.alpha_vantage_loader import USMarketDataManager
 
@@ -76,7 +76,7 @@ class HybridTradingSystem:
     
     def __init__(self):
         # Inicializa sistemas
-        self.equilibrada_pro = EquilibradaProStrategy()
+        self.equilibrada_pro = ProductionTradingSystem()
         self.us_analyzer = USMarketAnalyzer()
         self.us_strategy = USMarketStrategy()
         self.data_manager = USMarketDataManager()

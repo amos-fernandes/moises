@@ -22,7 +22,7 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from src.trading.production_system import EquilibradaProStrategy
+from src.trading.production_system import ProductionTradingSystem
 from src.trading.us_market_system import USMarketAnalyzer, USMarketSignal
 from src.config.multi_asset_config import OPTIMIZED_ASSET_CONFIGS
 
@@ -80,7 +80,7 @@ class NeuralTradingAgent:
         self.reward_history = []
         
         # Integração com estratégias existentes
-        self.equilibrada_pro = EquilibradaProStrategy()
+        self.equilibrada_pro = ProductionTradingSystem()
         self.us_analyzer = USMarketAnalyzer()
         
         logger.info("🧠 Neural Trading Agent inicializado")
