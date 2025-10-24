@@ -1,0 +1,9 @@
+{
+  "input": "src\\model\\ppo_custom_deep_portfolio_agent.zip",
+  "output": "src\\model\\ppo_custom_deep_portfolio_agent.keras",
+  "ok": false,
+  "steps": [
+    "load_model_failed: File format not supported: filepath=src\\model\\ppo_custom_deep_portfolio_agent.zip. Keras 3 only supports V3 `.keras` files and legacy H5 format files (`.h5` extension). Note that the legacy SavedModel format is not supported by `load_model()` in Keras 3. In order to reload a TensorFlow SavedModel as an inference-only layer in Keras 3, use `keras.layers.TFSMLayer(src\\model\\ppo_custom_deep_portfolio_agent.zip, call_endpoint='serving_default')` (note that your `call_endpoint` might have a different name).",
+    "tfsmlayer_failed: SavedModel file does not exist at: src\\model\\ppo_custom_deep_portfolio_agent.zip\\{saved_model.pbtxt|saved_model.pb}"
+  ]
+}
