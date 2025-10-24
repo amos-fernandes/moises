@@ -17,3 +17,12 @@ class ContinuousLearningSystem:
         
     def force_training_session(self):
         return True
+        
+    def get_current_status(self):
+        return {
+            "learning_active": True,
+            "current_accuracy": 0.5,
+            "total_experiences": 0,
+            "training_sessions": 0,
+            "neural_vs_expert_performance": {}
+        }
