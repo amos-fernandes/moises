@@ -259,6 +259,16 @@ async def shutdown_event():
     logger.info("🛑 Finalizando sistema")
     neural_trading_system.stop_learning()
 
+@app.get("/health")
+async def health_check():
+    """Health check básico"""
+    return {
+        "status": "healthy",
+        "system_ready": neural_trading_system.system_ready,
+        "neural_agent_available": neural_trading_system.neural_agent is not None,
+        "learning_active": neural_trading_system.learning_thread is not None
+    }
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
     """Dashboard principal"""
@@ -334,16 +344,22 @@ async def dashboard():
 async def neural_status():
     """Status do sistema neural"""
     status = neural_trading_system.learning_system.get_current_status()
-    performance = neural_trading_system.neural_agent.evaluate_performance()
+    
+    # Verifica se neural_agent existe antes de chamar evaluate_performance
+    if neural_trading_system.neural_agent:
+        performance = neural_trading_system.neural_agent.evaluate_performance()
+        neural_performance = performance if not performance.get('insufficient_data') else None
+    else:
+        neural_performance = {"status": "neural_agent_not_initialized", "mode": "minimal_version"}
     
     return {
         "system_ready": neural_trading_system.system_ready,
         "learning_status": status,
-        "neural_performance": performance if not performance.get('insufficient_data') else None,
+        "neural_performance": neural_performance,
         "model_info": {
-            "exploration_rate": neural_trading_system.neural_agent.epsilon,
-            "memory_size": len(neural_trading_system.neural_agent.memory),
-            "training_memory_size": len(neural_trading_system.neural_agent.training_memory),
+            "exploration_rate": neural_trading_system.neural_agent.epsilon if neural_trading_system.neural_agent else 0.1,
+            "memory_size": len(neural_trading_system.neural_agent.memory) if neural_trading_system.neural_agent else 0,
+            "training_memory_size": len(neural_trading_system.neural_agent.training_memory) if neural_trading_system.neural_agent else 0,
         }
     }
 
@@ -432,7 +448,11 @@ async def adaptive_portfolio_analysis(request: AdaptivePortfolioRequest):
 @app.get("/api/neural/performance")
 async def neural_performance():
     """Métricas detalhadas de performance"""
-    performance = neural_trading_system.neural_agent.evaluate_performance()
+    if neural_trading_system.neural_agent:
+        performance = neural_trading_system.neural_agent.evaluate_performance()
+    else:
+        performance = {"status": "neural_agent_not_initialized", "accuracy": 0.5, "total_trades": 0}
+    
     learning_metrics = neural_trading_system.learning_system.learning_metrics
     
     return {
@@ -445,7 +465,7 @@ async def neural_performance():
         },
         "expert_comparison": learning_metrics.get('expert_vs_neural_comparison', [])[-5:],
         "model_parameters": {
-            "exploration_rate": neural_trading_system.neural_agent.epsilon,
+            "exploration_rate": neural_trading_system.neural_agent.epsilon if neural_trading_system.neural_agent else 0.1,
             "learning_rate": 0.001,
             "current_accuracy": 0.5
         }
@@ -470,8 +490,11 @@ async def neural_control(action: str):
             return {"message": "Aprendizado reiniciado", "status": "restarted"}
         
         elif action == "save":
-            neural_trading_system.neural_agent.save_model()
-            return {"message": "Modelo salvo", "status": "saved"}
+            if neural_trading_system.neural_agent:
+                neural_trading_system.neural_agent.save_model()
+                return {"message": "Modelo salvo", "status": "saved"}
+            else:
+                return {"message": "Neural agent não inicializado", "status": "not_available"}
         
         else:
             raise HTTPException(status_code=400, detail="Ação inválida")
