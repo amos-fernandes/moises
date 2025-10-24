@@ -615,17 +615,80 @@ async def multi_asset_portfolio():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# =====================================================
+# ENDPOINTS BINANCE REAL - TESTE CONECTIVIDADE
+# =====================================================
+
+@app.post("/api/trading/test-binance")
+async def test_binance_connection(request: dict):
+    """
+    Testa conexão real com Binance
+    Body: {"api_key": "...", "secret": "...", "use_testnet": true}
+    """
+    try:
+        # Importar binance tester
+        from src.trading.binance_real_tester import binance_tester
+        
+        api_key = request.get("api_key")
+        secret = request.get("secret") 
+        use_testnet = request.get("use_testnet", True)
+        
+        if not api_key or not secret:
+            raise HTTPException(status_code=400, detail="API key e secret são obrigatórios")
+        
+        # Executar teste de conexão
+        test_results = await binance_tester.test_binance_connection(
+            api_key=api_key,
+            secret=secret,
+            use_testnet=use_testnet
+        )
+        
+        return {
+            "test_results": test_results,
+            "connection_summary": binance_tester.get_connection_summary(),
+            "system_status": "ready_for_real_trading" if test_results.get("connection_status") == "SUCCESS" else "connection_failed"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro no teste Binance: {str(e)}")
+
+@app.get("/api/trading/binance-status")
+async def binance_connection_status():
+    """Status da última conexão Binance testada"""
+    try:
+        from src.trading.binance_real_tester import binance_tester
+        
+        summary = binance_tester.get_connection_summary()
+        
+        return {
+            "binance_connection": summary,
+            "ready_for_trading": summary.get("ready_for_neural_trading", False),
+            "last_test": summary.get("last_test", "Nenhum teste executado")
+        }
+        
+    except Exception as e:
+        return {
+            "binance_connection": {"status": "NOT_TESTED"},
+            "ready_for_trading": False,
+            "error": str(e)
+        }
+
 if __name__ == "__main__":
     import uvicorn
     
-    print("🧠 Sistema Neural Integrado com Aprendizado Contínuo")
-    print("🎯 Meta: 60%+ assertividade com IA adaptativa")
-    print("🚀 Combina: Equilibrada_Pro + US Market + Neural Learning")
+    print("🚀 NEURAL TRADING SYSTEM - EVOLUÇÃO + BINANCE REAL")
+    print("=" * 70)
+    print("🎯 Target: 85% accuracy")
+    print("🧠 Sistema: Neural + Expert híbrido com evolução")
+    print("📊 Evolução: 4 fases implementadas")
+    print("🌐 Endpoints: /api/evolution/* + /api/trading/*") 
+    print("💰 Binance: Teste real com /api/trading/test-binance")
+    print("=" * 70)
     
     uvicorn.run(
         "app_neural_trading:app",
         host="0.0.0.0",
-        port=8001,  # Porta diferente para não conflitar
+        port=8001,
         reload=True,
         log_level="info"
     )
