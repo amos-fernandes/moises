@@ -100,7 +100,7 @@ class ContaBinance:
             return {'error': True, 'detail': str(e)}
 
     def get_saldo_usdt(self):
-        """Obter saldo USDT"""
+        """Obter saldo USDT disponível"""
         account = self._request('GET', '/api/v3/account', {}, signed=True)
         if account.get('error'):
             return 0
@@ -113,6 +113,27 @@ class ContaBinance:
                     self.saldo_inicial = saldo
                 return saldo
         return 0
+    
+    def get_todos_saldos(self):
+        """Obter todos os saldos de criptomoedas da conta"""
+        account = self._request('GET', '/api/v3/account', {}, signed=True)
+        if account.get('error'):
+            return {}
+        
+        saldos = {}
+        for balance in account.get('balances', []):
+            free_balance = float(balance['free'])
+            locked_balance = float(balance['locked'])
+            total_balance = free_balance + locked_balance
+            
+            if total_balance > 0:
+                saldos[balance['asset']] = {
+                    'free': free_balance,
+                    'locked': locked_balance,
+                    'total': total_balance
+                }
+        
+        return saldos
 
     def executar_trade(self, symbol, amount):
         """Executar trade de compra"""
@@ -307,6 +328,9 @@ class MoisesMultiConta:
                 }
                 
                 for conta_id, conta in self.contas.items():
+                    # Obter todos os saldos da conta
+                    todos_saldos = conta.get_todos_saldos()
+                    
                     dashboard_info['contas'][conta_id] = {
                         'nome': conta.nome,
                         'saldo_inicial': conta.saldo_inicial,
@@ -314,7 +338,8 @@ class MoisesMultiConta:
                         'trades_executados': conta.trades_executados,
                         'status': conta.status,
                         'ultimo_trade': conta.ultimo_trade,
-                        'ativa': conta.ativa
+                        'ativa': conta.ativa,
+                        'saldos_crypto': todos_saldos
                     }
                 
                 # Salvar dashboard
@@ -392,21 +417,31 @@ def main():
     config = carregar_configuracao()
     
     # Conta 1 (já configurada no .env)
-    from pathlib import Path
     env_file = Path('.env')
     if env_file.exists():
         env_vars = {}
-        with open(env_file, 'r') as f:
-            for line in f:
-                if '=' in line and not line.startswith('#'):
-                    key, value = line.strip().split('=', 1)
-                    env_vars[key] = value.strip('"').strip("'")
-        
-        api_key = env_vars.get('BINANCE_API_KEY')
-        api_secret = env_vars.get('BINANCE_API_SECRET')
-        
-        if api_key and api_secret:
-            moises.adicionar_conta("CONTA_1", api_key, api_secret, "Sua Conta Principal")
+        try:
+            with open(env_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if '=' in line and not line.startswith('#') and not line.startswith('BINANCE_API_KEY') and not line.startswith('BINANCE_API_SECRET'):
+                        continue
+                    if '=' in line and not line.startswith('#'):
+                        key, value = line.split('=', 1)
+                        env_vars[key] = value.strip('"').strip("'").strip()
+            
+            api_key = env_vars.get('BINANCE_API_KEY')
+            api_secret = env_vars.get('BINANCE_API_SECRET')
+            
+            if api_key and api_secret:
+                moises.adicionar_conta("CONTA_1", api_key, api_secret, "Sua Conta Principal")
+        except Exception as e:
+            print(f"Aviso: Não foi possível carregar conta principal do .env: {e}")
+            # Tentar usar a CONTA_3 que tem as mesmas chaves
+            for conta_id, dados in config.items():
+                if dados.get('nome') == 'amos':
+                    moises.adicionar_conta("CONTA_1", dados['api_key'], dados['api_secret'], "Sua Conta Principal (amos)")
+                    break
 
     # Adicionar outras contas do config
     for conta_id, dados in config.items():

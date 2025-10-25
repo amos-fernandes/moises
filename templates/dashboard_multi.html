@@ -405,10 +405,33 @@
                                     <div class="stat-value" style="font-size: 0.9em;">${conta.status}</div>
                                 </div>
                             </div>
+                            ${this.gerarSaldosCrypto(conta.saldos_crypto || {})}
                         </div>
                     `;
                     grid.innerHTML += contaCard;
                 });
+            }
+
+            gerarSaldosCrypto(saldos) {
+                if (!saldos || Object.keys(saldos).length === 0) {
+                    return '';
+                }
+                
+                let html = '<div style="margin-top: 15px;"><div style="font-size: 0.9em; font-weight: bold; margin-bottom: 10px; text-align: center;">💎 Posições em Crypto:</div>';
+                
+                Object.entries(saldos).forEach(([asset, dados]) => {
+                    if (asset !== 'USDT' && dados.total > 0) {
+                        html += `
+                            <div style="background: rgba(255,255,255,0.1); padding: 8px; margin: 5px 0; border-radius: 8px; display: flex; justify-content: space-between;">
+                                <span style="font-weight: bold;">${asset}:</span>
+                                <span>${dados.total.toFixed(8)}</span>
+                            </div>
+                        `;
+                    }
+                });
+                
+                html += '</div>';
+                return html;
             }
 
             atualizarTrades(trades) {

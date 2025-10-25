@@ -1,0 +1,35 @@
+{
+  "timestamp": "2025-10-25T09:58:11.309780",
+  "total_contas": 3,
+  "contas_ativas": 3,
+  "total_trades": 0,
+  "contas": {
+    "CONTA_1": {
+      "nome": "Sua Conta Principal",
+      "saldo_inicial": 4.95716279,
+      "saldo_atual": 4.95716279,
+      "trades_executados": 0,
+      "status": "Saldo baixo: $4.96",
+      "ultimo_trade": 0,
+      "ativa": true
+    },
+    "CONTA_2": {
+      "nome": "paulo",
+      "saldo_inicial": 18.34719562,
+      "saldo_atual": 18.34719562,
+      "trades_executados": 0,
+      "status": "Aguardando pr\u00f3xima an\u00e1lise",
+      "ultimo_trade": 0,
+      "ativa": true
+    },
+    "CONTA_3": {
+      "nome": "amos",
+      "saldo_inicial": 4.95716279,
+      "saldo_atual": 4.95716279,
+      "trades_executados": 0,
+      "status": "Saldo baixo: $4.96",
+      "ultimo_trade": 0,
+      "ativa": true
+    }
+  }
+}
