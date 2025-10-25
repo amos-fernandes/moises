@@ -1,0 +1,44 @@
+# config_multi_contas.json
+# Configuração para múltiplas contas - MOISES Multi-Account Trading
+{
+  "contas": {
+    "conta_principal": {
+      "nome": "Conta Principal",
+      "ativa": true,
+      "api_key": "WSKbhdmBs31cmSQSYxAkGnfbFqV8kDMiUX9me6RG5JbKn27XOcmvh7E3w0erZVSc",
+      "api_secret": "SERÁ_CARREGADO_DO_ENV",
+      "cor_dashboard": "#00ff88",
+      "max_trades_dia": 20,
+      "valor_max_trade": 50,
+      "porcentagem_humanitaria": 0.20
+    },
+    "conta_secundaria": {
+      "nome": "Conta Secundária", 
+      "ativa": false,
+      "api_key": "ADICIONAR_AQUI_A_NOVA_KEY",
+      "api_secret": "ADICIONAR_AQUI_O_NOVO_SECRET",
+      "cor_dashboard": "#ff8800",
+      "max_trades_dia": 15,
+      "valor_max_trade": 30,
+      "porcentagem_humanitaria": 0.20
+    },
+    "conta_terceira": {
+      "nome": "Conta Terceira",
+      "ativa": false,
+      "api_key": "SERA_ADICIONADO_AMANHA",
+      "api_secret": "SERA_ADICIONADO_AMANHA", 
+      "cor_dashboard": "#8800ff",
+      "max_trades_dia": 10,
+      "valor_max_trade": 25,
+      "porcentagem_humanitaria": 0.20
+    }
+  },
+  "configuracao_geral": {
+    "intervalo_analise": 180,
+    "intervalo_entre_trades": 300,
+    "simbolos_trading": ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "DOTUSDT"],
+    "confianca_minima": 75,
+    "dashboard_port": 8000,
+    "websocket_port": 8001
+  }
+}
