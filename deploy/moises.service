@@ -11,7 +11,7 @@ WorkingDirectory=/home/moises/trading
 Environment=PATH=/home/moises/trading/.venv/bin
 Environment=PYTHONUNBUFFERED=1
 Environment=TZ=America/Sao_Paulo
-ExecStart=/home/moises/trading/.venv/bin/python /home/moises/trading/trading_real_vps.py
+ExecStart=/home/moises/trading/.venv/bin/python /home/moises/trading/moises_continuo_vps.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
