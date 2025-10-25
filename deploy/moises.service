@@ -1,0 +1,29 @@
+[Unit]
+Description=MOISES Trading Bot - Real Operations
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=moises
+Group=moises
+WorkingDirectory=/home/moises/trading
+Environment=PATH=/home/moises/trading/.venv/bin
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=America/Sao_Paulo
+ExecStart=/home/moises/trading/.venv/bin/python /home/moises/trading/trading_real_vps.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=moises-trading
+
+# Segurança
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/home/moises/trading/logs /home/moises/trading/reports
+
+[Install]
+WantedBy=multi-user.target

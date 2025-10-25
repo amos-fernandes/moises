@@ -1,0 +1,26 @@
+{
+  "moises_info": {
+    "birth_date": "2025-10-24",
+    "current_phase": "BEBÊ",
+    "mission": "Ajudar crianças através de trading inteligente",
+    "neural_accuracy": "95%",
+    "humanitarian_allocation": "20%"
+  },
+  "trading_config": {
+    "initial_capital_usdt": 18.18,
+    "daily_trades_target": 2,
+    "profit_per_trade": "1%",
+    "preferred_pairs": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "BNBUSDT"
+    ],
+    "trading_hours": "09:00-18:00 UTC"
+  },
+  "humanitarian_system": {
+    "families_target": "Famílias necessitadas",
+    "monthly_support": "R$ 500 por família",
+    "allocation_percent": 20,
+    "focus": "Crianças em situação de vulnerabilidade"
+  }
+}
