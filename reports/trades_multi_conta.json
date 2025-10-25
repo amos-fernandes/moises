@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "timestamp": "2025-10-25T10:06:52.439209",
+    "conta_id": "CONTA_2",
+    "conta_nome": "paulo",
+    "symbol": "BTCUSDT",
+    "order_id": 50789877867,
+    "usdt_gasto": 4.4718236,
+    "btc_recebido": 4e-05,
+    "preco_execucao": 111795.58999999998,
+    "saldo_antes": 18.34719562,
+    "saldo_depois": 13.87537202,
+    "teste_sistema": true
+  }
+]
