@@ -1,0 +1,55 @@
+{
+  "timestamp": "2025-10-27 16:19:07",
+  "teste_conexoes": {
+    "CONTA_2": {
+      "conexao": "OK",
+      "sync_tempo": "OK",
+      "saldo": "$13.88",
+      "analise_mercado": "ERRO"
+    },
+    "CONTA_3": {
+      "conexao": "OK",
+      "sync_tempo": "OK",
+      "saldo": "$18.31",
+      "analise_mercado": "ERRO"
+    }
+  },
+  "teste_analise_mercado": {
+    "BTCUSDT": {
+      "status": "ANALISADO",
+      "confidence": 50,
+      "estrategia": "teste_rapido",
+      "entry_price": 115087.01,
+      "recomendacao": "AGUARDAR"
+    },
+    "ETHUSDT": {
+      "status": "ANALISADO",
+      "confidence": 64.59022286125045,
+      "estrategia": "teste_rapido",
+      "entry_price": 4217.9,
+      "recomendacao": "AGUARDAR"
+    },
+    "ADAUSDT": {
+      "status": "ANALISADO",
+      "confidence": 50,
+      "estrategia": "teste_rapido",
+      "entry_price": 0.6795,
+      "recomendacao": "AGUARDAR"
+    },
+    "DOGEUSDT": {
+      "status": "ANALISADO",
+      "confidence": 53.073929961089235,
+      "estrategia": "teste_rapido",
+      "entry_price": 0.20467,
+      "recomendacao": "AGUARDAR"
+    }
+  },
+  "teste_calculo_tamanhos": {
+    "CONTA_2": {
+      "erro": "float division by zero"
+    },
+    "CONTA_3": {
+      "erro": "float division by zero"
+    }
+  }
+}

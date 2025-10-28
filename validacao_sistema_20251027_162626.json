@@ -1,0 +1,89 @@
+{
+  "timestamp": "2025-10-27 16:25:00",
+  "teste_conexoes": {
+    "CONTA_2": {
+      "conexao": "OK",
+      "sync_tempo": "OK",
+      "saldo": "$13.88",
+      "analise_mercado": "ERRO"
+    },
+    "CONTA_3": {
+      "conexao": "OK",
+      "sync_tempo": "OK",
+      "saldo": "$18.31",
+      "analise_mercado": "ERRO"
+    }
+  },
+  "teste_analise_mercado": {
+    "BTCUSDT": {
+      "status": "ANALISADO",
+      "confidence": 50,
+      "estrategia": "teste_rapido",
+      "entry_price": 114940.92,
+      "recomendacao": "AGUARDAR"
+    },
+    "ETHUSDT": {
+      "status": "ANALISADO",
+      "confidence": 63.24776785714268,
+      "estrategia": "teste_rapido",
+      "entry_price": 4209.24,
+      "recomendacao": "AGUARDAR"
+    },
+    "ADAUSDT": {
+      "status": "ANALISADO",
+      "confidence": 50,
+      "estrategia": "teste_rapido",
+      "entry_price": 0.6772,
+      "recomendacao": "AGUARDAR"
+    },
+    "DOGEUSDT": {
+      "status": "ANALISADO",
+      "confidence": 50.11583011583045,
+      "estrategia": "teste_rapido",
+      "entry_price": 0.20408,
+      "recomendacao": "AGUARDAR"
+    }
+  },
+  "teste_calculo_tamanhos": {
+    "CONTA_2": {
+      "saldo_atual": 13.87537202,
+      "tamanhos_calculados": [
+        {
+          "confidence": 95,
+          "tamanho_calculado": 6.0,
+          "percentual_saldo": 43.2420838255838
+        },
+        {
+          "confidence": 88,
+          "tamanho_calculado": 6.0,
+          "percentual_saldo": 43.2420838255838
+        },
+        {
+          "confidence": 85,
+          "tamanho_calculado": 6.0,
+          "percentual_saldo": 43.2420838255838
+        }
+      ]
+    },
+    "CONTA_3": {
+      "saldo_atual": 18.31073264,
+      "tamanhos_calculados": [
+        {
+          "confidence": 95,
+          "tamanho_calculado": 7.32,
+          "percentual_saldo": 39.976554428026425
+        },
+        {
+          "confidence": 88,
+          "tamanho_calculado": 7.32,
+          "percentual_saldo": 39.976554428026425
+        },
+        {
+          "confidence": 85,
+          "tamanho_calculado": 7.32,
+          "percentual_saldo": 39.976554428026425
+        }
+      ]
+    }
+  }
+}

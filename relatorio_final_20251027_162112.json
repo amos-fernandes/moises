@@ -1,0 +1,26 @@
+{
+  "inicio_operacao": "2025-10-27T16:19:04.702548",
+  "fim_operacao": "2025-10-27T16:21:12.823176",
+  "duracao_total": "0:02:08.120628",
+  "estatisticas": {
+    "trades_executados": 0,
+    "trades_vencedores": 0,
+    "lucro_total": 0,
+    "maior_perda": 0,
+    "maior_ganho": 0,
+    "saldo_total_atual": 0
+  },
+  "metas": {
+    "paulo": {
+      "saldo_inicial": 13.88,
+      "perda_atual": -15.82,
+      "meta_recuperacao": 16.0,
+      "risco_maximo": 0.05
+    },
+    "amos": {
+      "saldo_inicial": 4.96,
+      "meta_crescimento": 6.0,
+      "risco_maximo": 0.03
+    }
+  }
+}

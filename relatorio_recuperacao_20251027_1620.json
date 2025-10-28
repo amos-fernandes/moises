@@ -1,0 +1,17 @@
+{
+  "timestamp": "2025-10-27T16:20:57.160265",
+  "contas": {
+    "CONTA_2": {
+      "saldo_atual": 0,
+      "perda_inicial": 0,
+      "progresso_recuperacao": 0,
+      "meta_diaria": 0
+    },
+    "CONTA_3": {
+      "saldo_atual": 0,
+      "perda_inicial": 0,
+      "progresso_recuperacao": 0,
+      "meta_diaria": 0
+    }
+  }
+}

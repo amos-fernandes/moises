@@ -1,79 +1,35 @@
 {
-  "timestamp": "2025-10-25T10:07:06.107494",
-  "total_contas": 2,
-  "contas_ativas": 2,
+  "timestamp": "2025-10-25T10:12:42.012677",
+  "total_contas": 3,
+  "contas_ativas": 3,
   "total_trades": 0,
   "contas": {
+    "CONTA_1": {
+      "nome": "Sua Conta Principal",
+      "saldo_inicial": 4.95716279,
+      "saldo_atual": 4.95716279,
+      "trades_executados": 0,
+      "status": "Saldo baixo: $4.96",
+      "ultimo_trade": 0,
+      "ativa": true
+    },
     "CONTA_2": {
       "nome": "paulo",
-      "saldo_inicial": 13.87537202,
+      "saldo_inicial": 18.34719562,
       "saldo_atual": 13.87537202,
       "trades_executados": 0,
-      "status": "1 posi\u00e7\u00f5es ativas",
+      "status": "Aguardando pr\u00f3xima an\u00e1lise",
       "ultimo_trade": 0,
-      "ativa": true,
-      "saldos_crypto": {
-        "BTC": {
-          "free": 3.996e-05,
-          "locked": 0.0,
-          "total": 3.996e-05
-        },
-        "USDT": {
-          "free": 13.87537202,
-          "locked": 0.0,
-          "total": 13.87537202
-        }
-      },
-      "valor_total_usd": 18.3416348864,
-      "cryptos": [
-        {
-          "asset": "BTC",
-          "quantidade": 3.996e-05,
-          "valor_usd": 4.466262866399999,
-          "preco": 111768.34
-        }
-      ]
+      "ativa": true
     },
     "CONTA_3": {
       "nome": "amos",
       "saldo_inicial": 4.95716279,
       "saldo_atual": 4.95716279,
       "trades_executados": 0,
-      "status": "2 posi\u00e7\u00f5es ativas",
+      "status": "Saldo baixo: $4.96",
       "ultimo_trade": 0,
-      "ativa": true,
-      "saldos_crypto": {
-        "BTC": {
-          "free": 0.00011988,
-          "locked": 0.0,
-          "total": 0.00011988
-        },
-        "USDT": {
-          "free": 4.95716279,
-          "locked": 0.0,
-          "total": 4.95716279
-        },
-        "SHIB": {
-          "free": 0.46,
-          "locked": 0.0,
-          "total": 0.46
-        }
-      },
-      "valor_total_usd": 18.355556853199996,
-      "cryptos": [
-        {
-          "asset": "BTC",
-          "quantidade": 0.00011988,
-          "valor_usd": 13.3983893988,
-          "preco": 111765.01
-        },
-        {
-          "asset": "SHIB",
-          "quantidade": 0.46,
-          "valor_usd": 4.6644e-06,
-          "preco": 1.014e-05
-        }
-      ]
+      "ativa": true
     }
   }
 }
