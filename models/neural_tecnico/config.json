@@ -1,0 +1,21 @@
+{
+  "feature_columns": [
+    "rsi",
+    "sma_20",
+    "sma_50",
+    "ema_12",
+    "ema_26",
+    "macd",
+    "macd_signal",
+    "bb_upper",
+    "bb_lower",
+    "bb_middle",
+    "price_change",
+    "price_change_5",
+    "volume_ratio",
+    "trend_20",
+    "trend_50"
+  ],
+  "trained_at": "2025-10-28T06:17:41.693554",
+  "model_type": "neural_tecnico_enhanced"
+}
